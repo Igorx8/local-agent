@@ -25,6 +25,10 @@ workflow:
   adaptiveReviewMaximum: 5
   inferenceRetries: 2
   requireObjectiveProgress: true
+  stopAfterConsecutiveStagnantIterations: 2
+  autoCommitCheckpoints: true
+  stopOnAmbiguousCriticalFinding: true
+  requireRegressionTestForConfirmedDefect: true
   autoMerge: false
 context:
   warningThreshold: 0.70

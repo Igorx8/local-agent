@@ -17,3 +17,21 @@ export function evaluateScope(change: ChangeSummary, policy: ScopePolicy): Scope
   if (change.migrations.length && policy.requireMigrationJustification) findings.push({ code: "MIGRATION_CHANGE", evidence: change.migrations.join(", "), requiresJustification: true });
   return findings;
 }
+
+function globExpression(pattern: string): RegExp {
+  let source = "";
+  for (let index = 0; index < pattern.length; index++) {
+    const character = pattern[index];
+    if (character === "*" && pattern[index + 1] === "*") { if (pattern[index + 2] === "/") { source += "(?:.*/)?"; index += 2; } else { source += ".*"; index++; } }
+    else if (character === "*") source += "[^/]*";
+    else source += character?.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+  }
+  return new RegExp(`^${source}$`);
+}
+
+export function assertChangedPathsAllowed(files: string[], allowedPaths: string[], deniedPatterns: string[]): void {
+  for (const file of files) {
+    if (deniedPatterns.some((pattern) => globExpression(pattern).test(file))) throw new Error(`changed path is denied: ${file}`);
+    if (allowedPaths.length && !prefixMatch(file, allowedPaths)) throw new Error(`changed path is outside allowed scope: ${file}`);
+  }
+}

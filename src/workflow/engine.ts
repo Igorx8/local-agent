@@ -1,0 +1,118 @@
+import type { HarnessConfig } from "../config.js";
+import type { RunState } from "../state/types.js";
+import type { StateStore } from "../state/store.js";
+import type { GateResult } from "../tools/gates.js";
+import { requiredGatesPassed } from "../tools/gates.js";
+import { compareGateResults } from "../tools/baseline.js";
+import { mergeReviews } from "../review/merge.js";
+import { evaluateProgress, type IterationEvidence } from "../review/progress.js";
+import { confirmedFindings, requiresHumanDecision, validateRegressionEvidence } from "../review/validate.js";
+import { acceptanceMatrixSchema, auditSchema, oracleTestsSchema, planSchema, reviewSchema, triageSchema, workResultSchema, type AcceptanceMatrix, type Finding, type Triage } from "./contracts.js";
+import { assertTransition } from "./transitions.js";
+import { writeArtifact } from "./artifacts.js";
+import type { RoleInvocation, RoleRunner } from "./role-runner.js";
+
+export interface BaselineResult { commit: string; treeHash: string; gates: GateResult[]; artifactPath: string; }
+export interface CheckpointResult { commit: string; treeHash: string; changedFiles: string[]; }
+export interface WorkflowDependencies {
+  preflight(): Promise<void>;
+  baseline(): Promise<BaselineResult>;
+  gates(iteration: number, oracleArtifact: string): Promise<GateResult[]>;
+  checkpoint(kind: "implementation" | "repair", iteration: number): Promise<CheckpointResult>;
+}
+export interface WorkflowInput { requirements: string; definitionOfDone: string; publicContracts?: string[]; }
+
+export class WorkflowEngine {
+  private state!: RunState;
+  private previousEvidence?: IterationEvidence;
+  private stagnantRounds = 0;
+  private priorConfirmedIds = new Set<string>();
+  private rootCauseCounts = new Map<string, number>();
+  private sessionIds = new Set<string>();
+  constructor(private readonly config: HarnessConfig, private readonly store: StateStore, private readonly roles: RoleRunner, private readonly dependencies: WorkflowDependencies) {}
+
+  private async transition(stage: RunState["stage"]): Promise<void> {
+    assertTransition(this.state.stage, stage); const terminal = stage === "SUCCEEDED" ? "succeeded" : stage === "FAILED" ? "failed" : stage === "ESCALATED" ? "escalated" : "active";
+    this.state = { ...this.state, stage, status: terminal }; await this.store.write(this.state);
+  }
+  private async artifact(name: string, value: unknown): Promise<string> { return writeArtifact(this.state.artifactPath, name, value); }
+  private async invoke<T>(invocation: RoleInvocation, schema: import("zod").z.ZodType<T>): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.config.workflow.inferenceRetries; attempt++) try {
+      const result = await this.roles.invoke(invocation, schema); if (this.sessionIds.has(result.sessionID)) throw new Error(`role runner reused session: ${result.sessionID}`); this.sessionIds.add(result.sessionID); await this.artifact(`responses/${invocation.iteration}-${invocation.role}-${result.sessionID}.json`, { sessionID: result.sessionID, role: invocation.role, raw: result.raw }); return result.value;
+    } catch (error) { lastError = error; if (attempt < this.config.workflow.inferenceRetries) { this.state.counters.inferenceRetries++; await this.store.write(this.state); } }
+    throw lastError;
+  }
+  private prompt(task: string, data: unknown): string { return `${task}\nReturn JSON only matching the requested contract.\nInput:\n${JSON.stringify(data, null, 2)}`; }
+
+  async run(input: WorkflowInput): Promise<RunState> {
+    this.state = await this.store.read();
+    try {
+      await this.transition("PREFLIGHT"); await this.dependencies.preflight();
+      await this.transition("BASELINE_CREATED"); await this.transition("BASELINE_GATES_RUNNING");
+      const baseline = await this.dependencies.baseline(); this.state.baseline = { commit: baseline.commit, treeHash: baseline.treeHash, gatesArtifact: baseline.artifactPath }; await this.store.write(this.state);
+      await this.transition("BASELINE_CAPTURED");
+      await this.transition("ACCEPTANCE_CRITERIA_GENERATING");
+      const acceptance = await this.invoke({ role: "planner", iteration: 0, freshSession: true, artifactReferences: [], prompt: this.prompt("Derive implementation-independent acceptance criteria from the requirements.", input) }, acceptanceMatrixSchema);
+      await this.transition("ACCEPTANCE_CRITERIA_VALIDATING"); const acceptancePath = await this.artifact("acceptance-criteria.json", acceptance); this.state.acceptanceCriteriaArtifact = acceptancePath; await this.store.write(this.state);
+      await this.transition("ORACLE_DESIGNING");
+      const oracle = await this.invoke({ role: "testArchitect", iteration: 0, freshSession: true, artifactReferences: [acceptancePath], prompt: this.prompt("Design independent oracle tests before any implementation exists. Do not inspect an implementation diff.", { requirements: input.requirements, publicContracts: input.publicContracts ?? [], acceptance }) }, oracleTestsSchema);
+      await this.transition("ORACLE_VALIDATING"); this.validateOracle(oracle.tests.flatMap((test) => test.acceptanceCriteria), acceptance); const oraclePath = await this.artifact("oracle-tests.json", oracle); this.state.oracleTestsArtifact = oraclePath; await this.store.write(this.state);
+      await this.transition("PLANNING");
+      const plan = await this.invoke({ role: "planner", iteration: 0, freshSession: true, artifactReferences: [acceptancePath], prompt: this.prompt("Create an implementation plan mapped to acceptance criteria.", { requirements: input.requirements, acceptance }) }, planSchema);
+      await this.transition("PLAN_VALIDATION"); this.validateReferences(plan.steps.flatMap((step) => step.acceptanceCriteria), acceptance, "plan"); const planPath = await this.artifact("plan.json", plan);
+      await this.transition("IMPLEMENTING");
+      const implementation = await this.invoke({ role: "implementer", iteration: 0, freshSession: true, artifactReferences: [acceptancePath, planPath], prompt: this.prompt("Implement the approved plan. The independent oracle tests are intentionally hidden until the first checkpoint.", { requirements: input.requirements, acceptance, plan }) }, workResultSchema);
+      await this.artifact("implementation.json", implementation); await this.transition("IMPLEMENTATION_CHECKPOINT"); let checkpoint = await this.dependencies.checkpoint("implementation", 0);
+
+      let iteration = 0; let incremental = false;
+      while (true) {
+        await this.transition("GATES_RUNNING"); const gates = await this.dependencies.gates(iteration, oraclePath); await this.artifact(`gates/iteration-${iteration}.json`, { gates, baselineAttribution: compareGateResults(baseline.gates, gates) });
+        if (incremental) await this.transition("INCREMENTAL_REVIEW");
+        await this.transition("REPOSITORY_REVIEWING");
+        const repositoryReview = await this.invoke({ role: "repositoryReviewer", iteration, freshSession: true, artifactReferences: [acceptancePath, planPath], prompt: this.prompt("Review repository integration, regressions, scope, and maintainability. Provide evidence, not preferences.", { requirements: input.requirements, acceptance, plan, gates, iteration }) }, reviewSchema);
+        await this.artifact(`reviews/${iteration}-repository.json`, repositoryReview);
+        await this.transition("REQUIREMENTS_REVIEWING");
+        const requirementsReview = await this.invoke({ role: "requirementsReviewer", iteration, freshSession: true, artifactReferences: [acceptancePath, planPath], prompt: this.prompt("Independently review compliance with requirements and acceptance criteria.", { requirements: input.requirements, acceptance, plan, gates, iteration }) }, reviewSchema);
+        await this.artifact(`reviews/${iteration}-requirements.json`, requirementsReview);
+        await this.transition("REVIEWS_MERGING"); const merged = mergeReviews(repositoryReview, requirementsReview); await this.artifact(`reviews/${iteration}-merged.json`, { findings: merged });
+        await this.transition("FINDINGS_VALIDATION");
+        const triage = await this.invoke({ role: "validator", iteration, freshSession: true, artifactReferences: [`reviews/${iteration}-merged.json`], prompt: this.prompt("Validate every finding against its evidence and classify it.", { findings: merged }) }, triageSchema);
+        this.validateTriage(merged, triage); await this.artifact(`reviews/${iteration}-triage.json`, triage); const confirmed = confirmedFindings(merged, triage); validateRegressionEvidence(confirmed, triage);
+        if (requiresHumanDecision(merged, triage)) { await this.transition("ESCALATED"); return this.state; }
+        await this.transition("PROGRESS_EVALUATION");
+        const evidence: IterationEvidence = { gates, confirmed, provenCriteria: acceptance.criteria.filter((criterion) => criterion.status === "proven").length, changedFiles: checkpoint.changedFiles.length };
+        const progress = evaluateProgress(this.previousEvidence, evidence); await this.artifact(`reviews/${iteration}-progress.json`, progress);
+        const blocking = confirmed.filter((finding) => finding.severity === "critical" || finding.severity === "high");
+        if (progress.decision === "escalate" || this.repeatedDefect(blocking, triage)) { await this.transition("ESCALATED"); return this.state; }
+        if (!blocking.length && requiredGatesPassed(gates)) break;
+        if (progress.decision === "stop_stagnated") this.stagnantRounds++; else this.stagnantRounds = 0;
+        if (this.stagnantRounds >= this.config.workflow.stopAfterConsecutiveStagnantIterations || this.state.counters.repairIterations >= this.config.workflow.adaptiveReviewMaximum || (this.state.counters.repairIterations >= this.config.workflow.maxReviewIterations && progress.improvements.length === 0)) { await this.transition("ESCALATED"); return this.state; }
+        this.previousEvidence = evidence; this.priorConfirmedIds = new Set(blocking.map((finding) => finding.id));
+        await this.transition("REPAIRING");
+        const repair = await this.invoke({ role: "repair", iteration: iteration + 1, freshSession: true, artifactReferences: [oraclePath, `reviews/${iteration}-triage.json`], prompt: this.prompt("Repair confirmed findings only. Add a regression test for every testable defect and demonstrate fail-before/pass-after evidence.", { confirmedFindings: blocking, triage: triage.findings.filter((item) => blocking.some((finding) => finding.id === item.findingId)), oracleArtifact: oraclePath }) }, workResultSchema);
+        await this.artifact(`repairs/${iteration + 1}.json`, repair); this.state.counters.repairIterations++; await this.store.write(this.state);
+        await this.transition("REPAIR_CHECKPOINT"); checkpoint = await this.dependencies.checkpoint("repair", iteration + 1); iteration++; incremental = true;
+      }
+      await this.transition("FINAL_AUDIT");
+      const audit = await this.invoke({ role: "auditor", iteration, freshSession: true, artifactReferences: [acceptancePath, planPath, oraclePath], prompt: this.prompt("Perform a final independent audit against every acceptance criterion.", { requirements: input.requirements, definitionOfDone: input.definitionOfDone, acceptance }) }, auditSchema);
+      this.validateReferences(audit.acceptanceCriteria.map((criterion) => criterion.id), acceptance, "audit"); if (new Set(audit.acceptanceCriteria.map((criterion) => criterion.id)).size !== acceptance.criteria.length) throw new Error("audit must address every acceptance criterion"); await this.artifact("audit.json", audit);
+      if (audit.decision === "requires_human_decision") await this.transition("ESCALATED");
+      else if (audit.decision === "pass" && audit.acceptanceCriteria.every((criterion) => criterion.status === "proven") && !audit.findings.some((finding) => ["critical", "high"].includes(finding.severity))) await this.transition("SUCCEEDED");
+      else await this.transition("FAILED");
+      return this.state;
+    } catch (error) {
+      await this.artifact("logs/workflow-error.json", { stage: this.state.stage, error: error instanceof Error ? error.message : String(error) });
+      if (!["SUCCEEDED", "FAILED", "ESCALATED"].includes(this.state.stage)) { const target = this.state.stage === "PREFLIGHT" || this.state.stage === "BASELINE_GATES_RUNNING" || this.state.stage === "IMPLEMENTATION_CHECKPOINT" || this.state.stage === "REPAIR_CHECKPOINT" ? "FAILED" : "ESCALATED"; await this.transition(target); }
+      return this.state;
+    }
+  }
+  private validateOracle(references: string[], acceptance: AcceptanceMatrix): void { this.validateReferences(references, acceptance, "oracle"); }
+  private validateReferences(references: string[], acceptance: AcceptanceMatrix, artifact: string): void { const ids = new Set(acceptance.criteria.map((criterion) => criterion.id)); for (const id of references) if (!ids.has(id)) throw new Error(`${artifact} references unknown acceptance criterion: ${id}`); }
+  private validateTriage(findings: Finding[], triage: Triage): void { const expected = new Set(findings.map((finding) => finding.id)); const actual = new Set(triage.findings.map((item) => item.findingId)); if (triage.findings.length !== expected.size || expected.size !== actual.size || [...expected].some((id) => !actual.has(id))) throw new Error("triage must classify every merged finding exactly once"); }
+  private repeatedDefect(blocking: Finding[], triage: Triage): boolean {
+    if (blocking.some((finding) => this.priorConfirmedIds.has(finding.id))) return true;
+    for (const item of triage.findings.filter((entry) => blocking.some((finding) => finding.id === entry.findingId))) { const count = (this.rootCauseCounts.get(item.rootCause) ?? 0) + 1; this.rootCauseCounts.set(item.rootCause, count); if (count >= 2) return true; }
+    return false;
+  }
+}

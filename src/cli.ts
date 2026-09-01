@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { runDoctor } from "./doctor.js";
+import { readRun, startRun } from "./workflow/run.js";
 
 const program = new Command().name("harness").description("Local multi-agent engineering harness").version("0.1.0");
 
@@ -30,6 +31,23 @@ program.command("init").description("Create a safe project-local harness configu
   const { readFile } = await import("node:fs/promises");
   await writeFile(destination, await readFile(source), { flag: "wx", mode: 0o600 });
   process.stdout.write(`Created ${destination}\n`);
+});
+
+program.command("run").description("Execute the deterministic local engineering workflow").requiredOption("--repo <path>", "target Git repository").requiredOption("--requirements <file>", "requirements Markdown file").option("-c, --config <file>", "configuration file", "config/harness.yaml").option("--definition-of-done <text>", "explicit definition of done").action(async (options) => {
+  const state = await startRun({ repository: options.repo, requirementsFile: options.requirements, config: await loadConfig(options.config), definitionOfDone: options.definitionOfDone });
+  process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
+  process.exitCode = state.status === "succeeded" ? 0 : state.status === "escalated" ? 6 : 5;
+});
+
+program.command("status").description("Read persisted run status").argument("<run-id>").option("--repo <path>", "target repository", ".").option("--json", "emit JSON").action(async (runId, options) => {
+  const state = await readRun(options.repo, runId);
+  if (options.json) process.stdout.write(`${JSON.stringify(state, null, 2)}\n`); else process.stdout.write(`${state.runId} ${state.status} ${state.stage} repairs=${state.counters.repairIterations}\n`);
+});
+
+program.command("resume").description("Inspect a persisted run before recovery support is enabled").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
+  const state = await readRun(options.repo, runId);
+  if (state.status === "succeeded" || state.status === "failed" || state.status === "escalated") { process.stdout.write(`${JSON.stringify(state, null, 2)}\n`); return; }
+  throw new Error(`run ${runId} stopped at ${state.stage}; editing-stage reconciliation is scheduled for Milestone 8 and automatic resume is refused safely`);
 });
 
 program.parseAsync().catch((error) => { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 2; });

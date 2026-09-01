@@ -38,3 +38,7 @@ export async function createWorktree(repository: string, workspaceRoot: string, 
 }
 
 export async function currentIdentity(repository: string): Promise<RepositoryIdentity> { return inspectRepository(repository); }
+export async function changedFiles(repository: string): Promise<string[]> {
+  const status = await git(repository, ["status", "--porcelain"]);
+  return status ? status.split("\n").map((line) => line.slice(3).split(" -> ").at(-1) ?? "").filter(Boolean) : [];
+}

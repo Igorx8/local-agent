@@ -25,6 +25,10 @@ export const harnessConfigSchema = z.object({
     adaptiveReviewMaximum: z.number().int().min(1).default(5),
     inferenceRetries: z.number().int().min(0).default(2),
     requireObjectiveProgress: z.boolean().default(true),
+    stopAfterConsecutiveStagnantIterations: z.number().int().min(1).default(2),
+    autoCommitCheckpoints: z.boolean().default(true),
+    stopOnAmbiguousCriticalFinding: z.boolean().default(true),
+    requireRegressionTestForConfirmedDefect: z.boolean().default(true),
     autoMerge: z.literal(false).default(false)
   }).refine((v) => v.adaptiveReviewMaximum >= v.maxReviewIterations, "adaptive maximum must be >= normal maximum"),
   context: z.object({

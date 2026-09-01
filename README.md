@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation stops at Milestone 3 and includes typed OpenCode sessions/events plus router and explicit-process llama.cpp lifecycle adapters. The deterministic multi-agent workflow itself begins in Milestone 4.
+Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation reaches Milestone 4: typed local runtimes plus a deterministic, persisted core workflow for acceptance criteria, hidden oracle design, planning, implementation, gates, independent reviews, finding validation, bounded repair and final audit. Advanced mutation/property/flaky verification remains Milestone 5.
 
 ## Where it runs
 
@@ -17,6 +17,15 @@ npm run check
 npm test
 npm run dev -- doctor --config config/harness.yaml
 ```
+
+With OpenCode and the llama.cpp router already running and the production model aliases configured:
+
+```bash
+npm run dev -- run --repo /absolute/project --requirements /absolute/requirements.md --config config/harness.yaml
+npm run dev -- status <run-id> --repo /absolute/project --json
+```
+
+`resume` currently refuses interrupted editing stages safely; Git/session reconciliation is deliberately reserved for the recovery hardening milestone.
 
 Set absolute GGUF paths in `modelFiles`. Keep API keys in environment variables or protected files; never put secrets in YAML.
 
