@@ -21,4 +21,11 @@ describe("OpenCode adapter", () => {
     await sessions.prompt({ sessionID: "ses-1", text: "plan", agent: "planner", model: { providerID: "llama.cpp", modelID: "qwen" } });
     expect(received).toMatchObject({ path: { id: "ses-1" }, query: { directory: "/repo" }, body: { agent: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, parts: [{ type: "text", text: "plan" }] } });
   });
+  it("passes an abort signal to SSE subscription", async () => {
+    let received: unknown;
+    const client = { event: { subscribe: async (value: unknown) => { received = value; return { stream: (async function* () {})() }; } } } as unknown as OpencodeClient;
+    const sessions = new OpencodeSessions(client, "/repo"); const controller = new AbortController();
+    for await (const _event of sessions.events(controller.signal)) { /* empty fixture */ }
+    expect(received).toMatchObject({ query: { directory: "/repo" }, signal: controller.signal });
+  });
 });

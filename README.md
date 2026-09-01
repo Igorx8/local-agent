@@ -23,3 +23,5 @@ Set absolute GGUF paths in `modelFiles`. Keep API keys in environment variables 
 The exit code is `0` only when required prerequisites pass. Missing OpenCode/llama.cpp runtimes are displayed as `BLOCKED` and exit with code `4`; invalid configuration exits with code `2`. This makes `doctor` suitable for CI/setup checks without hiding an incomplete machine setup.
 
 See [compatibility report](docs/compatibility-report.md) and [implementation plan](docs/implementation-plan.md).
+
+The optional local runtime has been validated on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, hashes, evidence, reproduction commands, and remaining production-model risks.

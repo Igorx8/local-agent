@@ -38,8 +38,8 @@ export class OpencodeSessions {
     return { input: assistant.tokens.input, output: assistant.tokens.output, reasoning: assistant.tokens.reasoning, cacheRead: assistant.tokens.cache.read, cacheWrite: assistant.tokens.cache.write, provenance: "opencode_message_metadata" };
   }
 
-  async *events(): AsyncGenerator<Event> {
-    const subscription = await this.client.event.subscribe({ query: { directory: this.directory } });
+  async *events(signal?: AbortSignal): AsyncGenerator<Event> {
+    const subscription = await this.client.event.subscribe({ query: { directory: this.directory }, signal });
     for await (const event of subscription.stream) yield event;
   }
 }

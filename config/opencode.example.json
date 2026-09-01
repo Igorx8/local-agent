@@ -3,5 +3,21 @@
   "share": "disabled",
   "autoupdate": false,
   "enabled_providers": ["llama.cpp"],
+  "server": { "hostname": "127.0.0.1", "port": 4096, "mdns": false },
+  "provider": {
+    "llama.cpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama-server (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "{env:LLAMA_API_KEY}"
+      },
+      "models": {
+        "qwen36-main": { "name": "Qwen planner/reviewer", "limit": { "context": 32768, "output": 8192 } },
+        "qwen3-coder-impl": { "name": "Qwen implementer", "limit": { "context": 32768, "output": 8192 } },
+        "devstral-repo": { "name": "Devstral repository reviewer", "limit": { "context": 32768, "output": 8192 } }
+      }
+    }
+  },
   "compaction": { "auto": false, "prune": true, "reserved": 10000 }
 }
