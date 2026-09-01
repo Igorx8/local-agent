@@ -1,0 +1,49 @@
+version: 1
+runtime:
+  opencodeUrl: http://127.0.0.1:4096
+  llamaUrl: http://127.0.0.1:8080
+  modelStrategy: router
+  localOnly: true
+models:
+  supervisor: llama.cpp/qwen36-main
+  planner: llama.cpp/qwen36-main
+  testArchitect: llama.cpp/qwen36-main
+  implementer: llama.cpp/qwen3-coder-impl
+  repositoryReviewer: llama.cpp/devstral-repo
+  requirementsReviewer: llama.cpp/qwen36-main
+  validator: llama.cpp/qwen36-main
+  repair: llama.cpp/qwen3-coder-impl
+  adversarialVerifier: llama.cpp/devstral-repo
+  auditor: llama.cpp/qwen36-main
+# Map aliases to absolute GGUF paths. doctor fingerprints these files in place.
+modelFiles: {}
+workflow:
+  maxReviewIterations: 3
+  adaptiveReviewMaximum: 5
+  inferenceRetries: 2
+  requireObjectiveProgress: true
+  autoMerge: false
+context:
+  warningThreshold: 0.70
+  prepareHandoffThreshold: 0.78
+  handoffThreshold: 0.85
+  hardStopThreshold: 0.92
+  reservedTokens: 8192
+  maxHandoffTokens: 6000
+# Commands are argv arrays: no shell parsing or interpolation.
+quality:
+  test: { command: npm, args: [test], required: true, timeoutMs: 600000 }
+  lint: null
+  typecheck: { command: npm, args: [run, check], required: true, timeoutMs: 600000 }
+security:
+  deniedPathPatterns: ["**/.env", "**/.ssh/**"]
+  redactPatterns: []
+telemetry:
+  jsonLogs: true
+  storePrompts: true
+  storeResponses: true
+git:
+  requireCleanWorktree: true
+  useIsolatedWorktree: true
+  branchPrefix: agent/
+  defaultBranchProtection: true

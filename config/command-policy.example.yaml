@@ -1,0 +1,7 @@
+version: 1
+execution:
+  shell: false
+  allowConfiguredQualityCommandsOnly: true
+denyExecutables: [sudo, su, rm, dd, mkfs, shutdown, reboot]
+denyGitArguments: [push, merge, reset, rebase, clean, branch, tag]
+deniedPaths: ["**/.env", "**/.ssh/**", "**/.gnupg/**"]

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-state.schema.json",
+  "title": "Harness persisted run state",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "repositoryPath", "artifactPath", "stage", "status", "createdAt", "updatedAt", "counters"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "repositoryPath": { "type": "string", "minLength": 1 },
+    "artifactPath": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string" },
+    "status": { "enum": ["active", "paused", "succeeded", "failed", "escalated"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "counters": {
+      "type": "object",
+      "required": ["inferenceRetries", "repairIterations", "contextHandoffs"],
+      "properties": {
+        "inferenceRetries": { "type": "integer", "minimum": 0 },
+        "repairIterations": { "type": "integer", "minimum": 0 },
+        "contextHandoffs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "baseline": { "type": "object" },
+    "modelManifest": { "type": "string" },
+    "acceptanceCriteriaArtifact": { "type": "string" },
+    "oracleTestsArtifact": { "type": "string" },
+    "historicalMetricsArtifact": { "type": "string" }
+  },
+  "additionalProperties": false
+}
