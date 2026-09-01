@@ -1,0 +1,38 @@
+import { ActiveModelRequestError, type ModelLifecycle, type ModelStatus } from "./types.js";
+import { checkedJson, pollUntil, type FetchLike } from "./http.js";
+
+interface RouterModel { id: string; status?: { value?: string; failed?: boolean }; }
+interface ModelsResponse { data: RouterModel[]; }
+export interface RouterOptions { baseUrl: string; apiKey?: string; startupTimeoutMs?: number; fetcher?: FetchLike; }
+
+export class RouterModelManager implements ModelLifecycle {
+  private current: ModelStatus = { state: "stopped" };
+  private activeRequests = 0;
+  private readonly fetcher: FetchLike;
+  constructor(private readonly options: RouterOptions) { this.fetcher = options.fetcher ?? fetch; }
+  status(): ModelStatus { return { ...this.current }; }
+  beginRequest(alias: string): void { if (this.current.alias !== alias || this.current.state !== "healthy") throw new Error(`model is not healthy: ${alias}`); this.activeRequests += 1; this.current = { ...this.current, state: "generating" }; }
+  endRequest(alias: string): void { if (this.current.alias !== alias || this.activeRequests === 0) throw new Error(`no active request for model: ${alias}`); this.activeRequests -= 1; if (!this.activeRequests) this.current = { ...this.current, state: "healthy" }; }
+  private headers(): HeadersInit { return { "content-type": "application/json", ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}) }; }
+  private url(route: string): string { return new URL(route, this.options.baseUrl).toString(); }
+  private async models(): Promise<RouterModel[]> { return (await checkedJson<ModelsResponse>(this.fetcher, this.url("/models"), { headers: this.headers() })).data; }
+
+  async ensureModel(alias: string): Promise<ModelStatus> {
+    if (this.activeRequests) throw new ActiveModelRequestError("cannot switch models while a response is active");
+    this.current = { alias, state: "loading" };
+    try {
+      const models = await this.models();
+      for (const model of models.filter((item) => item.id !== alias && item.status?.value === "loaded")) await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: model.id }) });
+      await checkedJson(this.fetcher, this.url("/models/load"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: alias }) });
+      await pollUntil(async () => (await this.models()).some((model) => model.id === alias && model.status?.value === "loaded" && !model.status.failed), this.options.startupTimeoutMs ?? 120_000);
+      const loaded = (await this.models()).filter((model) => model.status?.value === "loaded");
+      if (loaded.length !== 1 || loaded[0]?.id !== alias) throw new Error(`router invariant failed: expected only ${alias} loaded`);
+      return this.current = { alias, state: "healthy" };
+    } catch (error) { this.current = { alias, state: "error", detail: error instanceof Error ? error.message : String(error) }; throw error; }
+  }
+  async stop(): Promise<ModelStatus> {
+    if (this.activeRequests) throw new ActiveModelRequestError("cannot unload while a response is active");
+    if (this.current.alias) { this.current = { ...this.current, state: "unloading" }; await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: this.current.alias }) }); }
+    return this.current = { state: "stopped" };
+  }
+}

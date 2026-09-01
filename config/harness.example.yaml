@@ -17,6 +17,9 @@ models:
   auditor: llama.cpp/qwen36-main
 # Map aliases to absolute GGUF paths. doctor fingerprints these files in place.
 modelFiles: {}
+# Required by modelStrategy: process. Include --alias matching each key.
+modelProcesses: {}
+# qwen36-main: { command: llama-server, args: [--model, /absolute/path/qwen.gguf, --alias, qwen36-main, --host, 127.0.0.1, --port, "8080"] }
 workflow:
   maxReviewIterations: 3
   adaptiveReviewMaximum: 5

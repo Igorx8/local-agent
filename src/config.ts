@@ -19,6 +19,7 @@ export const harnessConfigSchema = z.object({
   }).refine((v) => [v.opencodeUrl, v.llamaUrl].every((url) => ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)), "localOnly requires loopback runtime URLs"),
   models: roleModelsSchema,
   modelFiles: z.record(z.string(), z.string()).default({}),
+  modelProcesses: z.record(z.string(), z.object({ command: z.string().min(1), args: z.array(z.string()).default([]) })).default({}),
   workflow: z.object({
     maxReviewIterations: z.number().int().min(1).default(3),
     adaptiveReviewMaximum: z.number().int().min(1).default(5),

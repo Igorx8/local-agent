@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "harness": "./dist/src/cli.js" },
+  "bin": {
+    "harness": "./dist/src/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
@@ -11,8 +13,11 @@
     "test:watch": "vitest",
     "dev": "tsx src/cli.ts"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
+    "@opencode-ai/sdk": "^1.18.25",
     "commander": "^14.0.0",
     "pino": "^9.9.0",
     "proper-lockfile": "^4.1.2",
