@@ -35,6 +35,14 @@ quality:
   test: { command: npm, args: [test], required: true, timeoutMs: 600000 }
   lint: null
   typecheck: { command: npm, args: [run, check], required: true, timeoutMs: 600000 }
+scope:
+  allowedPaths: []
+  deniedPaths: []
+  maxChangedFilesBeforeReview: 20
+  maxAddedLinesBeforeReview: 800
+  requireDependencyChangeJustification: true
+  requirePublicApiChangeJustification: true
+  requireMigrationJustification: true
 security:
   deniedPathPatterns: ["**/.env", "**/.ssh/**"]
   redactPatterns: []

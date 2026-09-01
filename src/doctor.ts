@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import type { HarnessConfig } from "./config.js";
+import { validateCommand } from "./tools/policy.js";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "blocked";
 export interface DoctorCheck { name: string; status: CheckStatus; detail: string; }
@@ -46,6 +47,12 @@ export async function runDoctor(config: HarnessConfig): Promise<DoctorReport> {
   checks.push(await endpoint("OpenCode health/API", config.runtime.opencodeUrl));
   checks.push(await endpoint("llama.cpp health", new URL("/health", config.runtime.llamaUrl).toString()));
   checks.push(...await Promise.all(Object.entries(config.modelFiles).map(([alias, file]) => fingerprint(alias, file))));
+  try {
+    for (const gate of Object.values(config.quality)) if (gate) validateCommand(gate);
+    checks.push({ name: "repository command policy", status: "pass", detail: `${Object.values(config.quality).filter(Boolean).length} configured command(s) validated as executable + argv` });
+  } catch (error) {
+    checks.push({ name: "repository command policy", status: "fail", detail: error instanceof Error ? error.message : String(error) });
+  }
   checks.push({ name: "token usage visibility", status: "blocked", detail: "requires a compatible running OpenCode/llama.cpp request; no undocumented field assumed" });
   checks.push({ name: "router unload behavior", status: "blocked", detail: "requires configured models and a running llama.cpp router; no model was started by doctor" });
   return { ok: checks.every((check) => check.status === "pass" || check.status === "warn"), generatedAt: new Date().toISOString(), checks };

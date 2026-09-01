@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation stops at Milestones 0 and 1: configuration, diagnostics, durable state primitives, locking, redacted structured logs, and tests. It does **not** yet dispatch agents or edit target repositories.
+Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation stops at Milestone 2: configuration, diagnostics, durable state, locking, redacted logs, isolated Git worktrees/checkpoints, command policy, deterministic quality gates, baseline evidence/comparison, and scope policies. It does **not** yet dispatch agents.
 
 ## Where it runs
 

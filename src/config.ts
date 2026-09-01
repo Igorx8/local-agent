@@ -35,6 +35,11 @@ export const harnessConfigSchema = z.object({
     maxHandoffTokens: z.number().int().positive().default(6000)
   }).refine((v) => v.warningThreshold < v.prepareHandoffThreshold && v.prepareHandoffThreshold < v.handoffThreshold && v.handoffThreshold < v.hardStopThreshold, "context thresholds must be strictly increasing"),
   quality: z.record(z.string(), commandSchema.nullable()).default({}),
+  scope: z.object({
+    allowedPaths: z.array(z.string()).default([]), deniedPaths: z.array(z.string()).default([]),
+    maxChangedFilesBeforeReview: z.number().int().positive().default(20), maxAddedLinesBeforeReview: z.number().int().positive().default(800),
+    requireDependencyChangeJustification: z.boolean().default(true), requirePublicApiChangeJustification: z.boolean().default(true), requireMigrationJustification: z.boolean().default(true)
+  }).default({ allowedPaths: [], deniedPaths: [], maxChangedFilesBeforeReview: 20, maxAddedLinesBeforeReview: 800, requireDependencyChangeJustification: true, requirePublicApiChangeJustification: true, requireMigrationJustification: true }),
   security: z.object({ deniedPathPatterns: z.array(z.string()).default(["**/.env", "**/.ssh/**"]), redactPatterns: z.array(z.string()).default([]) }).default({ deniedPathPatterns: ["**/.env", "**/.ssh/**"], redactPatterns: [] }),
   telemetry: z.object({ jsonLogs: z.boolean().default(true), storePrompts: z.boolean().default(true), storeResponses: z.boolean().default(true) }).default({ jsonLogs: true, storePrompts: true, storeResponses: true }),
   git: z.object({ requireCleanWorktree: z.boolean().default(true), useIsolatedWorktree: z.boolean().default(true), branchPrefix: z.string().default("agent/"), defaultBranchProtection: z.boolean().default(true) }).default({ requireCleanWorktree: true, useIsolatedWorktree: true, branchPrefix: "agent/", defaultBranchProtection: true })
