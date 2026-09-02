@@ -16,7 +16,12 @@ export const runStateSchema = z.object({
   modelManifest: z.string().optional(),
   acceptanceCriteriaArtifact: z.string().optional(),
   oracleTestsArtifact: z.string().optional(),
-  historicalMetricsArtifact: z.string().optional()
+  historicalMetricsArtifact: z.string().optional(),
+  context: z.object({ latestPromptTokens: z.number().int().nonnegative(), contextWindow: z.number().int().positive(), usage: z.number().min(0), provenance: z.enum(["exact", "estimated"]), source: z.string(), reason: z.string().optional() }).optional(),
+  handoffs: z.array(z.object({ sequence: z.number().int().positive(), role: z.string(), previousSessionId: z.string(), newSessionId: z.string(), path: z.string(), reason: z.string(), createdAt: z.string().datetime() })).default([]),
+  mutatingActionsBlocked: z.boolean().default(false),
+  manualHandoffRequested: z.boolean().default(false),
+  activeSession: z.object({ role: z.string(), sessionId: z.string() }).optional()
 });
 
 export type RunState = z.infer<typeof runStateSchema>;

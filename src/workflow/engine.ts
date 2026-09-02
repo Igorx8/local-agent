@@ -11,9 +11,11 @@ import { acceptanceMatrixSchema, auditSchema, oracleTestsSchema, planSchema, rev
 import { challengePlanSchema, type AdvancedVerificationResult } from "../verification/types.js";
 import { advancedVerificationPassed } from "../verification/suite.js";
 import { validateRegressionProofs, type RegressionProof } from "../verification/regression.js";
+import { decideContext, TurnBudgetHistory, type ContextDecision } from "../context/budget.js";
+import type { AgentRole } from "../opencode/agents.js";
 import { assertTransition } from "./transitions.js";
 import { writeArtifact } from "./artifacts.js";
-import type { RoleInvocation, RoleRunner } from "./role-runner.js";
+import type { RoleInvocation, RoleResult, RoleRunner } from "./role-runner.js";
 
 export interface BaselineResult { commit: string; treeHash: string; gates: GateResult[]; artifactPath: string; }
 export interface CheckpointResult { commit: string; treeHash: string; changedFiles: string[]; }
@@ -25,6 +27,9 @@ export interface WorkflowDependencies {
   advancedVerification?(changedFiles: string[], challenge: import("../verification/types.js").ChallengePlan): Promise<AdvancedVerificationResult>;
   regressionProof?(findings: Finding[], triage: Triage, defective: CheckpointResult, repaired: CheckpointResult): Promise<RegressionProof[]>;
   recordHistorical?(result: { success: boolean; firstPassGateSuccess: boolean; repairIterations: number; confirmedFindings: number; invalidFindings: number; verification: AdvancedVerificationResult; durationMs: number }): Promise<string>;
+  continuity?(event: { state: RunState; stage: RunState["stage"]; role: AgentRole; previousSessionId: string; decision: ContextDecision; objective: string; definitionOfDone: string; gates: GateResult[]; review: { confirmed: string[]; rejected: string[]; unresolved: string[] } }): Promise<{ path: string; newSessionId: string }>;
+  manualHandoffRequested?(): Promise<boolean>;
+  clearManualHandoffRequest?(): Promise<void>;
 }
 export interface WorkflowInput { requirements: string; definitionOfDone: string; publicContracts?: string[]; }
 
@@ -35,7 +40,11 @@ export class WorkflowEngine {
   private priorConfirmedIds = new Set<string>();
   private rootCauseCounts = new Map<string, number>();
   private sessionIds = new Set<string>();
-  constructor(private readonly config: HarnessConfig, private readonly store: StateStore, private readonly roles: RoleRunner, private readonly dependencies: WorkflowDependencies) {}
+  private readonly turnBudgets: TurnBudgetHistory;
+  private currentInput?: WorkflowInput;
+  private latestGates: GateResult[] = [];
+  private latestReview = { confirmed: [] as string[], rejected: [] as string[], unresolved: [] as string[] };
+  constructor(private readonly config: HarnessConfig, private readonly store: StateStore, private readonly roles: RoleRunner, private readonly dependencies: WorkflowDependencies) { this.turnBudgets = new TurnBudgetHistory(config.context.expectedNextTurnTokens); }
 
   private async transition(stage: RunState["stage"]): Promise<void> {
     assertTransition(this.state.stage, stage); const terminal = stage === "SUCCEEDED" ? "succeeded" : stage === "FAILED" ? "failed" : stage === "ESCALATED" ? "escalated" : "active";
@@ -43,16 +52,20 @@ export class WorkflowEngine {
   }
   private async artifact(name: string, value: unknown): Promise<string> { return writeArtifact(this.state.artifactPath, name, value); }
   private async invoke<T>(invocation: RoleInvocation, schema: import("zod").z.ZodType<T>): Promise<T> {
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= this.config.workflow.inferenceRetries; attempt++) try {
-      const result = await this.roles.invoke(invocation, schema); if (this.sessionIds.has(result.sessionID)) throw new Error(`role runner reused session: ${result.sessionID}`); this.sessionIds.add(result.sessionID); await this.artifact(`responses/${invocation.iteration}-${invocation.role}-${result.sessionID}.json`, { sessionID: result.sessionID, role: invocation.role, raw: result.raw }); return result.value;
-    } catch (error) { lastError = error; if (attempt < this.config.workflow.inferenceRetries) { this.state.counters.inferenceRetries++; await this.store.write(this.state); } }
-    throw lastError;
+    const persisted = await this.store.read(); const manualBefore = persisted.manualHandoffRequested || await this.dependencies.manualHandoffRequested?.() === true; if (manualBefore) { this.state = persisted; this.state.manualHandoffRequested = true; const prior = persisted.activeSession; if (!prior) throw new Error("manual handoff requested without an active session"); const observation = persisted.context ? { latestPromptTokens: persisted.context.latestPromptTokens, contextWindow: persisted.context.contextWindow, provenance: persisted.context.provenance, source: persisted.context.source as import("../context/budget.js").TokenObservation["source"] } : { latestPromptTokens: 0, contextWindow: 65536, provenance: "estimated" as const, source: "byte_estimate" as const }; await this.performHandoff(invocation.role, prior.sessionId, { ...observation, usage: observation.latestPromptTokens / observation.contextWindow, projectedTokens: observation.latestPromptTokens, reservedTokens: this.config.context.reservedTokens, effectiveHandoffThreshold: this.config.context.handoffThreshold, action: "handoff", reason: "manual" }); }
+    if (this.state.mutatingActionsBlocked) throw new Error("new model action refused while context handoff is pending");
+    let result: RoleResult<T> | undefined; let lastError: unknown;
+    for (let attempt = 0; attempt <= this.config.workflow.inferenceRetries; attempt++) try { result = await this.roles.invoke(invocation, schema); break; } catch (error) { lastError = error; if (attempt < this.config.workflow.inferenceRetries) { this.state.counters.inferenceRetries++; await this.store.write(this.state); } }
+    if (!result) throw lastError; if (this.sessionIds.has(result.sessionID)) throw new Error(`role runner reused session: ${result.sessionID}`); this.sessionIds.add(result.sessionID);
+    const external = await this.store.read(); this.state.manualHandoffRequested ||= external.manualHandoffRequested || await this.dependencies.manualHandoffRequested?.() === true; this.state.mutatingActionsBlocked ||= external.mutatingActionsBlocked; this.state.activeSession = { role: invocation.role, sessionId: result.sessionID }; await this.store.write(this.state); await this.artifact(`responses/${invocation.iteration}-${invocation.role}-${result.sessionID}.json`, { sessionID: result.sessionID, role: invocation.role, raw: result.raw, context: result.context });
+    if (this.state.manualHandoffRequested) { const observation = result.context ?? { latestPromptTokens: 0, contextWindow: 65536, provenance: "estimated" as const, source: "byte_estimate" as const }; await this.performHandoff(invocation.role, result.sessionID, { ...observation, usage: observation.latestPromptTokens / observation.contextWindow, projectedTokens: observation.latestPromptTokens, reservedTokens: this.config.context.reservedTokens, effectiveHandoffThreshold: this.config.context.handoffThreshold, action: "handoff", reason: "manual" }); } else if (result.context) await this.handleContext(invocation.role, result.sessionID, result.context);
+    return result.value;
   }
   private prompt(task: string, data: unknown): string { return `${task}\nReturn JSON only matching the requested contract.\nInput:\n${JSON.stringify(data, null, 2)}`; }
 
   async run(input: WorkflowInput): Promise<RunState> {
     const startedAt = performance.now();
+    this.currentInput = input;
     this.state = await this.store.read();
     try {
       await this.transition("PREFLIGHT"); await this.dependencies.preflight();
@@ -74,7 +87,7 @@ export class WorkflowEngine {
 
       let iteration = 0; let incremental = false; let firstPassGateSuccess = false; let totalConfirmed = 0; let totalInvalid = 0; const allChangedFiles = new Set(checkpoint.changedFiles);
       while (true) {
-        await this.transition("GATES_RUNNING"); const gates = await this.dependencies.gates(iteration, oraclePath); if (iteration === 0) firstPassGateSuccess = requiredGatesPassed(gates); await this.artifact(`gates/iteration-${iteration}.json`, { gates, baselineAttribution: compareGateResults(baseline.gates, gates) });
+        await this.transition("GATES_RUNNING"); const gates = await this.dependencies.gates(iteration, oraclePath); this.latestGates = gates; if (iteration === 0) firstPassGateSuccess = requiredGatesPassed(gates); await this.artifact(`gates/iteration-${iteration}.json`, { gates, baselineAttribution: compareGateResults(baseline.gates, gates) });
         if (incremental) await this.transition("INCREMENTAL_REVIEW");
         await this.transition("REPOSITORY_REVIEWING");
         const repositoryReview = await this.invoke({ role: "repositoryReviewer", iteration, freshSession: true, artifactReferences: [acceptancePath, planPath], prompt: this.prompt("Review repository integration, regressions, scope, and maintainability. Provide evidence, not preferences.", { requirements: input.requirements, acceptance, plan, gates, iteration }) }, reviewSchema);
@@ -85,7 +98,7 @@ export class WorkflowEngine {
         await this.transition("REVIEWS_MERGING"); const merged = mergeReviews(repositoryReview, requirementsReview); await this.artifact(`reviews/${iteration}-merged.json`, { findings: merged });
         await this.transition("FINDINGS_VALIDATION");
         const triage = await this.invoke({ role: "validator", iteration, freshSession: true, artifactReferences: [`reviews/${iteration}-merged.json`], prompt: this.prompt("Validate every finding against its evidence and classify it.", { findings: merged }) }, triageSchema);
-        this.validateTriage(merged, triage); await this.artifact(`reviews/${iteration}-triage.json`, triage); const confirmed = confirmedFindings(merged, triage); totalConfirmed += confirmed.length; totalInvalid += triage.findings.filter((item) => item.classification === "invalid").length; validateRegressionEvidence(confirmed, triage);
+        this.validateTriage(merged, triage); await this.artifact(`reviews/${iteration}-triage.json`, triage); const confirmed = confirmedFindings(merged, triage); this.latestReview = { confirmed: confirmed.map((finding) => finding.id), rejected: triage.findings.filter((item) => item.classification === "invalid").map((item) => `${item.findingId}: ${item.evidence}`), unresolved: triage.findings.filter((item) => item.classification === "requires_human_decision").map((item) => item.findingId) }; totalConfirmed += confirmed.length; totalInvalid += triage.findings.filter((item) => item.classification === "invalid").length; validateRegressionEvidence(confirmed, triage);
         if (requiresHumanDecision(merged, triage)) { await this.transition("ESCALATED"); return this.state; }
         await this.transition("PROGRESS_EVALUATION");
         const evidence: IterationEvidence = { gates, confirmed, provenCriteria: acceptance.criteria.filter((criterion) => criterion.status === "proven").length, changedFiles: checkpoint.changedFiles.length };
@@ -136,6 +149,17 @@ export class WorkflowEngine {
     if (blocking.some((finding) => this.priorConfirmedIds.has(finding.id))) return true;
     for (const item of triage.findings.filter((entry) => blocking.some((finding) => finding.id === entry.findingId))) { const count = (this.rootCauseCounts.get(item.rootCause) ?? 0) + 1; this.rootCauseCounts.set(item.rootCause, count); if (count >= 2) return true; }
     return false;
+  }
+  private async handleContext(role: AgentRole, previousSessionId: string, observation: import("../context/budget.js").TokenObservation): Promise<void> {
+    this.turnBudgets.record(role, observation.latestPromptTokens); const decision = decideContext(observation, { ...this.config.context, expectedNextTurnTokens: this.turnBudgets.expected(role) });
+    this.state.context = { latestPromptTokens: decision.latestPromptTokens, contextWindow: decision.contextWindow, usage: decision.usage, provenance: decision.provenance, source: decision.source, reason: decision.reason }; await this.store.write(this.state);
+    if (decision.action !== "handoff" && decision.action !== "hard_stop") return;
+    await this.performHandoff(role, previousSessionId, decision);
+  }
+  private async performHandoff(role: AgentRole, previousSessionId: string, decision: ContextDecision): Promise<void> {
+    this.state.mutatingActionsBlocked = true; this.state.manualHandoffRequested = false; await this.store.write(this.state); if (!this.dependencies.continuity || !this.currentInput) throw new Error(`context ${decision.action} requires continuity adapter`);
+    const resumeStage = this.state.stage; await this.transition("HANDOFF_GENERATING"); const result = await this.dependencies.continuity({ state: this.state, stage: resumeStage, role, previousSessionId, decision, objective: this.currentInput.requirements, definitionOfDone: this.currentInput.definitionOfDone, gates: this.latestGates, review: this.latestReview });
+    await this.transition("HANDOFF_VALIDATING"); await this.transition("SESSION_RESTARTING"); const sequence = this.state.counters.contextHandoffs + 1; this.state.counters.contextHandoffs = sequence; this.state.handoffs.push({ sequence, role, previousSessionId, newSessionId: result.newSessionId, path: result.path, reason: decision.reason, createdAt: new Date().toISOString() }); this.state.activeSession = { role, sessionId: result.newSessionId }; this.state.mutatingActionsBlocked = false; this.state.stage = resumeStage; await this.dependencies.clearManualHandoffRequest?.(); await this.store.write(this.state);
   }
   private skippedVerification(changedFiles: string[]): AdvancedVerificationResult { return { adversarial: { kind: "adversarial", status: "skipped", required: false, tests: [], detail: "no adapter supplied", durationMs: 0 }, property: { kind: "property", status: "skipped", required: false, tests: [], detail: "no adapter supplied", durationMs: 0 }, mutation: { kind: "mutation", status: "skipped", required: false, changedFiles, killed: 0, survived: 0, timedOut: 0, skipped: 0, relevantSurvivors: [], score: null, detail: "no adapter supplied", durationMs: 0 }, flaky: [] }; }
 }

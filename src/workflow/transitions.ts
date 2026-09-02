@@ -19,6 +19,8 @@ const transitions: Partial<Record<WorkflowStage, readonly WorkflowStage[]>> = {
 
 const terminal = new Set<WorkflowStage>(["SUCCEEDED", "FAILED", "ESCALATED"]);
 export function canTransition(from: WorkflowStage, to: WorkflowStage): boolean {
+  if (!terminal.has(from) && to === "HANDOFF_GENERATING") return true;
+  if (from === "SESSION_RESTARTING" && !terminal.has(to) && !["HANDOFF_GENERATING", "HANDOFF_VALIDATING", "SESSION_RESTARTING"].includes(to)) return true;
   if (!terminal.has(from) && (to === "FAILED" || to === "ESCALATED")) return true;
   return transitions[from]?.includes(to) ?? false;
 }

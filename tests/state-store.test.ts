@@ -7,7 +7,7 @@ import type { RunState } from "../src/state/types.js";
 
 function state(directory: string): RunState {
   const now = new Date().toISOString();
-  return { schemaVersion: 1, runId: "run-1", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 } };
+  return { schemaVersion: 1, runId: "run-1", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 }, handoffs: [], mutatingActionsBlocked: false, manualHandoffRequested: false };
 }
 
 describe("StateStore", () => {

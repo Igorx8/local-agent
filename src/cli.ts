@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { runDoctor } from "./doctor.js";
-import { readRun, startRun } from "./workflow/run.js";
+import { readRun, requestManualHandoff, startRun } from "./workflow/run.js";
 import { loadModelRegistry, requireAlias } from "./models/registry.js";
 import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
 import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
@@ -51,6 +51,10 @@ program.command("resume").description("Inspect a persisted run before recovery s
   const state = await readRun(options.repo, runId);
   if (state.status === "succeeded" || state.status === "failed" || state.status === "escalated") { process.stdout.write(`${JSON.stringify(state, null, 2)}\n`); return; }
   throw new Error(`run ${runId} stopped at ${state.stage}; editing-stage reconciliation is scheduled for Milestone 8 and automatic resume is refused safely`);
+});
+
+program.command("handoff").description("Request a safe handoff at the next model-action boundary").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
+  const request = await requestManualHandoff(options.repo, runId); process.stdout.write(`Handoff requested: ${request}\n`);
 });
 
 const model = program.command("model").description("Inspect and control registered local models");

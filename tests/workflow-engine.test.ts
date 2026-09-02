@@ -17,19 +17,20 @@ function passedGate(): GateResult { return { name: "test", required: true, statu
 
 class FakeRoles implements RoleRunner {
   invocations: RoleInvocation[] = []; private counts = new Map<string, number>();
-  constructor(private readonly outputs: Record<string, unknown[]>) {}
+  constructor(private readonly outputs: Record<string, unknown[]>, private readonly contextTokens?: number) {}
   async invoke<T>(invocation: RoleInvocation, schema: z.ZodType<T>): Promise<RoleResult<T>> {
     this.invocations.push(invocation); const index = this.counts.get(invocation.role) ?? 0; this.counts.set(invocation.role, index + 1);
-    const value = schema.parse(this.outputs[invocation.role]?.[index]); return { value, sessionID: `${invocation.role}-${index}`, raw: JSON.stringify(value) };
+    const value = schema.parse(this.outputs[invocation.role]?.[index]); return { value, sessionID: `${invocation.role}-${index}`, raw: JSON.stringify(value), ...(this.contextTokens ? { context: { latestPromptTokens: this.contextTokens, contextWindow: 65536, provenance: "exact" as const, source: "opencode_message_metadata" as const } } : {}) };
   }
 }
-async function setup(outputs: Record<string, unknown[]>, gateRounds = [[passedGate()]]) {
+async function setup(outputs: Record<string, unknown[]>, gateRounds = [[passedGate()]], contextTokens?: number) {
   const directory = await mkdtemp(path.join(tmpdir(), "workflow-")); const store = new StateStore(directory); const now = new Date().toISOString();
-  const state: RunState = { schemaVersion: 1, runId: "run-test", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 } }; await store.initialize(state);
+  const state: RunState = { schemaVersion: 1, runId: "run-test", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 }, handoffs: [], mutatingActionsBlocked: false, manualHandoffRequested: false }; await store.initialize(state);
   let gateIndex = 0; const checkpoints: string[] = [];
   const dependencies: WorkflowDependencies = { async preflight() {}, async baseline() { return { commit: "a".repeat(40), treeHash: "b".repeat(40), gates: [passedGate()], artifactPath: path.join(directory, "baseline.json") }; }, async gates() { return gateRounds[Math.min(gateIndex++, gateRounds.length - 1)] ?? []; }, async checkpoint(kind) { checkpoints.push(kind); return { commit: "c".repeat(40), treeHash: "d".repeat(40), changedFiles: ["src/x.ts"] }; } };
   dependencies.regressionProof = async (findings, _triage, defective, repaired) => findings.map((finding) => ({ findingId: finding.id, testPath: "tests/regression.ts", defectiveCheckpoint: defective.commit, repairedCheckpoint: `${repaired.commit}-repaired`, failBefore: { exitCode: 1, expectedReasonMatched: true, evidence: "focused test failed" }, passAfter: { exitCode: 0, evidence: "focused test passed" } }));
-  const roles = new FakeRoles(outputs); return { engine: new WorkflowEngine(config(), store, roles, dependencies), roles, checkpoints, store };
+  let handoffs = 0; dependencies.continuity = async (event) => ({ path: path.join(directory, `handoff-${++handoffs}.md`), newSessionId: `continued-${event.previousSessionId}` });
+  const roles = new FakeRoles(outputs, contextTokens); return { engine: new WorkflowEngine(config(), store, roles, dependencies), roles, checkpoints, store, dependencies };
 }
 const baseOutputs = (): Record<string, unknown[]> => ({
   planner: [
@@ -68,5 +69,11 @@ describe("WorkflowEngine", () => {
     outputs.validator = [classified, classified]; outputs.repair = [{ summary: "attempted", filesChanged: ["src/x.ts"], testsAdded: ["tests/regression.ts"], commandsRun: [], blockers: [] }];
     const fixture = await setup(outputs, [[passedGate()], [passedGate()]]); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
     expect(result.stage).toBe("ESCALATED"); expect(result.counters.repairIterations).toBe(1);
+  });
+  it("can cross multiple validated continuity boundaries", async () => {
+    const fixture = await setup(baseOutputs(), [[passedGate()]], 56_000); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" }); expect(result.stage).toBe("SUCCEEDED"); expect(result.counters.contextHandoffs).toBeGreaterThanOrEqual(2); expect(result.handoffs.every((item) => item.previousSessionId !== item.newSessionId)).toBe(true); expect(result.mutatingActionsBlocked).toBe(false);
+  });
+  it("does not count handoff validation failure as inference retry", async () => {
+    const fixture = await setup(baseOutputs(), [[passedGate()]], 56_000); fixture.dependencies.continuity = async () => { throw new Error("handoff validation failed twice"); }; const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" }); expect(result.stage).toBe("ESCALATED"); expect(result.counters.inferenceRetries).toBe(0); expect(result.mutatingActionsBlocked).toBe(true);
   });
 });

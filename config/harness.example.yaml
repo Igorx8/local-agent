@@ -46,6 +46,9 @@ context:
   hardStopThreshold: 0.92
   reservedTokens: 8192
   maxHandoffTokens: 6000
+  expectedNextTurnTokens:
+    implementer: 8192
+    repair: 8192
 # Commands are argv arrays: no shell parsing or interpolation.
 quality:
   test: { command: npm, args: [test], required: true, timeoutMs: 600000 }

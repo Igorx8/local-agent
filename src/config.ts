@@ -46,7 +46,8 @@ export const harnessConfigSchema = z.object({
     handoffThreshold: threshold.default(0.85),
     hardStopThreshold: threshold.default(0.92),
     reservedTokens: z.number().int().nonnegative().default(8192),
-    maxHandoffTokens: z.number().int().positive().default(6000)
+    maxHandoffTokens: z.number().int().positive().default(6000),
+    expectedNextTurnTokens: z.record(z.string(), z.number().int().positive()).default({})
   }).refine((v) => v.warningThreshold < v.prepareHandoffThreshold && v.prepareHandoffThreshold < v.handoffThreshold && v.handoffThreshold < v.hardStopThreshold, "context thresholds must be strictly increasing"),
   quality: z.record(z.string(), commandSchema.nullable()).default({}),
   scope: z.object({

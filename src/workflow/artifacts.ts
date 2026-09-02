@@ -6,3 +6,7 @@ export async function writeArtifact(directory: string, relativePath: string, val
   const temporary = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 }); await rename(temporary, file); return file;
 }
+export async function writeTextArtifact(directory: string, relativePath: string, value: string): Promise<string> {
+  const file = path.join(directory, relativePath); await mkdir(path.dirname(file), { recursive: true }); const temporary = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await writeFile(temporary, value, { mode: 0o600 }); await rename(temporary, file); return file;
+}
