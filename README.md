@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation reaches Milestone 4: typed local runtimes plus a deterministic, persisted core workflow for acceptance criteria, hidden oracle design, planning, implementation, gates, independent reviews, finding validation, bounded repair and final audit. Advanced mutation/property/flaky verification remains Milestone 5.
+Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation reaches Milestone 5: typed local runtimes, the deterministic core workflow, regression-proof contracts, adversarial/property adapters, changed-file mutation analysis, flaky classification, and append-only historical quality metrics.
 
 ## Where it runs
 
@@ -33,5 +33,7 @@ npm run dev -- status <run-id> --repo /absolute/project --json
 The exit code is `0` only when required prerequisites pass. Missing OpenCode/llama.cpp runtimes are displayed as `BLOCKED` and exit with code `4`; invalid configuration exits with code `2`. This makes `doctor` suitable for CI/setup checks without hiding an incomplete machine setup.
 
 See [compatibility report](docs/compatibility-report.md) and [implementation plan](docs/implementation-plan.md).
+
+Project-specific advanced verification commands use normalized, fail-closed adapters documented in [Milestone 5 advanced verification](docs/milestone-5-verification.md). The harness never guesses a test or mutation tool for the target repository.
 
 The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.

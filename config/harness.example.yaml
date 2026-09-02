@@ -28,6 +28,17 @@ workflow:
   stopOnAmbiguousCriticalFinding: true
   requireRegressionTestForConfirmedDefect: true
   autoMerge: false
+verification:
+  captureBaseline: true
+  designOracleTestsBeforeImplementation: true
+  hideOracleTestsUntilInitialCheckpoint: true
+  dualIndependentReview: true
+  propertyTesting: auto
+  mutationTesting: changed-files
+  flakyRepetitions: 3
+  # Adapters execute only configured executable + argv commands. Each command
+  # should emit the documented normalized JSON contract on stdout.
+  commands: {}
 context:
   warningThreshold: 0.70
   prepareHandoffThreshold: 0.78

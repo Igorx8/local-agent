@@ -68,10 +68,12 @@ export async function runDoctor(config: HarnessConfig): Promise<DoctorReport> {
   }
   try {
     for (const gate of Object.values(config.quality)) if (gate) validateCommand(gate);
+    for (const adapter of Object.values(config.verification.commands)) if (adapter) validateCommand(adapter);
     checks.push({ name: "repository command policy", status: "pass", detail: `${Object.values(config.quality).filter(Boolean).length} configured command(s) validated as executable + argv` });
   } catch (error) {
     checks.push({ name: "repository command policy", status: "fail", detail: error instanceof Error ? error.message : String(error) });
   }
+  for (const kind of ["adversarial", "property", "mutation", "flaky", "regression"] as const) checks.push({ name: `${kind} verification adapter`, status: config.verification.commands[kind] ? "pass" : "warn", detail: config.verification.commands[kind] ? "configured as executable + argv" : kind === "regression" ? "not configured; testable confirmed findings will fail closed" : "not configured; capability will be reported as skipped, never assumed" });
   checks.push({ name: "token usage visibility", status: "blocked", detail: "requires a compatible running OpenCode/llama.cpp request; no undocumented field assumed" });
   checks.push({ name: "router unload behavior", status: "blocked", detail: "requires configured models and a running llama.cpp router; no model was started by doctor" });
   return { ok: checks.every((check) => check.status === "pass" || check.status === "warn"), generatedAt: new Date().toISOString(), checks };

@@ -35,6 +35,11 @@ export const harnessConfigSchema = z.object({
     requireRegressionTestForConfirmedDefect: z.boolean().default(true),
     autoMerge: z.literal(false).default(false)
   }).refine((v) => v.adaptiveReviewMaximum >= v.maxReviewIterations, "adaptive maximum must be >= normal maximum"),
+  verification: z.object({
+    captureBaseline: z.literal(true).default(true), designOracleTestsBeforeImplementation: z.literal(true).default(true), hideOracleTestsUntilInitialCheckpoint: z.literal(true).default(true), dualIndependentReview: z.literal(true).default(true),
+    propertyTesting: z.enum(["auto", "configured", "off"]).default("auto"), mutationTesting: z.enum(["changed-files", "configured", "off"]).default("changed-files"), flakyRepetitions: z.number().int().min(2).default(3),
+    commands: z.object({ adversarial: commandSchema.optional(), property: commandSchema.optional(), mutation: commandSchema.optional(), flaky: commandSchema.optional(), regression: commandSchema.optional() }).default({})
+  }).default({ captureBaseline: true, designOracleTestsBeforeImplementation: true, hideOracleTestsUntilInitialCheckpoint: true, dualIndependentReview: true, propertyTesting: "auto", mutationTesting: "changed-files", flakyRepetitions: 3, commands: {} }),
   context: z.object({
     warningThreshold: threshold.default(0.7),
     prepareHandoffThreshold: threshold.default(0.78),

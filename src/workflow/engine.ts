@@ -8,6 +8,9 @@ import { mergeReviews } from "../review/merge.js";
 import { evaluateProgress, type IterationEvidence } from "../review/progress.js";
 import { confirmedFindings, requiresHumanDecision, validateRegressionEvidence } from "../review/validate.js";
 import { acceptanceMatrixSchema, auditSchema, oracleTestsSchema, planSchema, reviewSchema, triageSchema, workResultSchema, type AcceptanceMatrix, type Finding, type Triage } from "./contracts.js";
+import { challengePlanSchema, type AdvancedVerificationResult } from "../verification/types.js";
+import { advancedVerificationPassed } from "../verification/suite.js";
+import { validateRegressionProofs, type RegressionProof } from "../verification/regression.js";
 import { assertTransition } from "./transitions.js";
 import { writeArtifact } from "./artifacts.js";
 import type { RoleInvocation, RoleRunner } from "./role-runner.js";
@@ -19,6 +22,9 @@ export interface WorkflowDependencies {
   baseline(): Promise<BaselineResult>;
   gates(iteration: number, oracleArtifact: string): Promise<GateResult[]>;
   checkpoint(kind: "implementation" | "repair", iteration: number): Promise<CheckpointResult>;
+  advancedVerification?(changedFiles: string[], challenge: import("../verification/types.js").ChallengePlan): Promise<AdvancedVerificationResult>;
+  regressionProof?(findings: Finding[], triage: Triage, defective: CheckpointResult, repaired: CheckpointResult): Promise<RegressionProof[]>;
+  recordHistorical?(result: { success: boolean; firstPassGateSuccess: boolean; repairIterations: number; confirmedFindings: number; invalidFindings: number; verification: AdvancedVerificationResult; durationMs: number }): Promise<string>;
 }
 export interface WorkflowInput { requirements: string; definitionOfDone: string; publicContracts?: string[]; }
 
@@ -46,6 +52,7 @@ export class WorkflowEngine {
   private prompt(task: string, data: unknown): string { return `${task}\nReturn JSON only matching the requested contract.\nInput:\n${JSON.stringify(data, null, 2)}`; }
 
   async run(input: WorkflowInput): Promise<RunState> {
+    const startedAt = performance.now();
     this.state = await this.store.read();
     try {
       await this.transition("PREFLIGHT"); await this.dependencies.preflight();
@@ -65,9 +72,9 @@ export class WorkflowEngine {
       const implementation = await this.invoke({ role: "implementer", iteration: 0, freshSession: true, artifactReferences: [acceptancePath, planPath], prompt: this.prompt("Implement the approved plan. The independent oracle tests are intentionally hidden until the first checkpoint.", { requirements: input.requirements, acceptance, plan }) }, workResultSchema);
       await this.artifact("implementation.json", implementation); await this.transition("IMPLEMENTATION_CHECKPOINT"); let checkpoint = await this.dependencies.checkpoint("implementation", 0);
 
-      let iteration = 0; let incremental = false;
+      let iteration = 0; let incremental = false; let firstPassGateSuccess = false; let totalConfirmed = 0; let totalInvalid = 0; const allChangedFiles = new Set(checkpoint.changedFiles);
       while (true) {
-        await this.transition("GATES_RUNNING"); const gates = await this.dependencies.gates(iteration, oraclePath); await this.artifact(`gates/iteration-${iteration}.json`, { gates, baselineAttribution: compareGateResults(baseline.gates, gates) });
+        await this.transition("GATES_RUNNING"); const gates = await this.dependencies.gates(iteration, oraclePath); if (iteration === 0) firstPassGateSuccess = requiredGatesPassed(gates); await this.artifact(`gates/iteration-${iteration}.json`, { gates, baselineAttribution: compareGateResults(baseline.gates, gates) });
         if (incremental) await this.transition("INCREMENTAL_REVIEW");
         await this.transition("REPOSITORY_REVIEWING");
         const repositoryReview = await this.invoke({ role: "repositoryReviewer", iteration, freshSession: true, artifactReferences: [acceptancePath, planPath], prompt: this.prompt("Review repository integration, regressions, scope, and maintainability. Provide evidence, not preferences.", { requirements: input.requirements, acceptance, plan, gates, iteration }) }, reviewSchema);
@@ -78,7 +85,7 @@ export class WorkflowEngine {
         await this.transition("REVIEWS_MERGING"); const merged = mergeReviews(repositoryReview, requirementsReview); await this.artifact(`reviews/${iteration}-merged.json`, { findings: merged });
         await this.transition("FINDINGS_VALIDATION");
         const triage = await this.invoke({ role: "validator", iteration, freshSession: true, artifactReferences: [`reviews/${iteration}-merged.json`], prompt: this.prompt("Validate every finding against its evidence and classify it.", { findings: merged }) }, triageSchema);
-        this.validateTriage(merged, triage); await this.artifact(`reviews/${iteration}-triage.json`, triage); const confirmed = confirmedFindings(merged, triage); validateRegressionEvidence(confirmed, triage);
+        this.validateTriage(merged, triage); await this.artifact(`reviews/${iteration}-triage.json`, triage); const confirmed = confirmedFindings(merged, triage); totalConfirmed += confirmed.length; totalInvalid += triage.findings.filter((item) => item.classification === "invalid").length; validateRegressionEvidence(confirmed, triage);
         if (requiresHumanDecision(merged, triage)) { await this.transition("ESCALATED"); return this.state; }
         await this.transition("PROGRESS_EVALUATION");
         const evidence: IterationEvidence = { gates, confirmed, provenCriteria: acceptance.criteria.filter((criterion) => criterion.status === "proven").length, changedFiles: checkpoint.changedFiles.length };
@@ -92,14 +99,29 @@ export class WorkflowEngine {
         await this.transition("REPAIRING");
         const repair = await this.invoke({ role: "repair", iteration: iteration + 1, freshSession: true, artifactReferences: [oraclePath, `reviews/${iteration}-triage.json`], prompt: this.prompt("Repair confirmed findings only. Add a regression test for every testable defect and demonstrate fail-before/pass-after evidence.", { confirmedFindings: blocking, triage: triage.findings.filter((item) => blocking.some((finding) => finding.id === item.findingId)), oracleArtifact: oraclePath }) }, workResultSchema);
         await this.artifact(`repairs/${iteration + 1}.json`, repair); this.state.counters.repairIterations++; await this.store.write(this.state);
-        await this.transition("REPAIR_CHECKPOINT"); checkpoint = await this.dependencies.checkpoint("repair", iteration + 1); iteration++; incremental = true;
+        await this.transition("REPAIR_CHECKPOINT"); const defective = checkpoint; checkpoint = await this.dependencies.checkpoint("repair", iteration + 1); checkpoint.changedFiles.forEach((file) => allChangedFiles.add(file));
+        const testable = confirmed.filter((finding) => triage.findings.find((item) => item.findingId === finding.id)?.testable);
+        if (testable.length) {
+          if (!this.dependencies.regressionProof) throw new Error("testable confirmed findings require a configured deterministic regression-proof adapter");
+          const proofs = validateRegressionProofs(testable.map((finding) => finding.id), await this.dependencies.regressionProof(testable, triage, defective, checkpoint)); await this.artifact(`repairs/${iteration + 1}-regression-proof.json`, proofs);
+        }
+        iteration++; incremental = true;
       }
+      await this.transition("ADVERSARIAL_TESTING");
+      const changedFiles = [...allChangedFiles].sort(); const challenge = await this.invoke({ role: "adversarialVerifier", iteration, freshSession: true, artifactReferences: [acceptancePath, oraclePath], prompt: this.prompt("Design challenge scenarios for invalid input, boundaries, state failures, partial failures, concurrency, and idempotency where relevant.", { requirements: input.requirements, acceptance, changedFiles }) }, challengePlanSchema);
+      this.validateReferences(challenge.scenarios.flatMap((scenario) => scenario.acceptanceCriteria), acceptance, "adversarial challenge plan"); await this.artifact("adversarial/challenge-plan.json", challenge);
+      const verification = this.dependencies.advancedVerification ? await this.dependencies.advancedVerification(changedFiles, challenge) : this.skippedVerification(changedFiles);
+      this.validateReferences([...verification.adversarial.tests, ...verification.property.tests].flatMap((test) => test.acceptanceCriteria), acceptance, "advanced verification");
+      await this.artifact("adversarial/results.json", verification.adversarial); await this.transition("PROPERTY_TESTING"); await this.artifact("property-testing.json", verification.property);
+      await this.transition("MUTATION_TESTING"); await this.artifact("mutation/results.json", verification.mutation); await this.transition("FLAKY_ANALYSIS"); await this.artifact("flaky-analysis/results.json", verification.flaky);
+      if (!advancedVerificationPassed(verification)) { await this.transition("FAILED"); if (this.dependencies.recordHistorical) { const historical = await this.dependencies.recordHistorical({ success: false, firstPassGateSuccess, repairIterations: this.state.counters.repairIterations, confirmedFindings: totalConfirmed, invalidFindings: totalInvalid, verification, durationMs: Math.round(performance.now() - startedAt) }); this.state.historicalMetricsArtifact = historical; await this.store.write(this.state); } return this.state; }
       await this.transition("FINAL_AUDIT");
       const audit = await this.invoke({ role: "auditor", iteration, freshSession: true, artifactReferences: [acceptancePath, planPath, oraclePath], prompt: this.prompt("Perform a final independent audit against every acceptance criterion.", { requirements: input.requirements, definitionOfDone: input.definitionOfDone, acceptance }) }, auditSchema);
       this.validateReferences(audit.acceptanceCriteria.map((criterion) => criterion.id), acceptance, "audit"); if (new Set(audit.acceptanceCriteria.map((criterion) => criterion.id)).size !== acceptance.criteria.length) throw new Error("audit must address every acceptance criterion"); await this.artifact("audit.json", audit);
       if (audit.decision === "requires_human_decision") await this.transition("ESCALATED");
       else if (audit.decision === "pass" && audit.acceptanceCriteria.every((criterion) => criterion.status === "proven") && !audit.findings.some((finding) => ["critical", "high"].includes(finding.severity))) await this.transition("SUCCEEDED");
       else await this.transition("FAILED");
+      if (this.dependencies.recordHistorical) { const historical = await this.dependencies.recordHistorical({ success: this.state.status === "succeeded", firstPassGateSuccess, repairIterations: this.state.counters.repairIterations, confirmedFindings: totalConfirmed, invalidFindings: totalInvalid, verification, durationMs: Math.round(performance.now() - startedAt) }); this.state.historicalMetricsArtifact = historical; await this.store.write(this.state); }
       return this.state;
     } catch (error) {
       await this.artifact("logs/workflow-error.json", { stage: this.state.stage, error: error instanceof Error ? error.message : String(error) });
@@ -115,4 +137,5 @@ export class WorkflowEngine {
     for (const item of triage.findings.filter((entry) => blocking.some((finding) => finding.id === entry.findingId))) { const count = (this.rootCauseCounts.get(item.rootCause) ?? 0) + 1; this.rootCauseCounts.set(item.rootCause, count); if (count >= 2) return true; }
     return false;
   }
+  private skippedVerification(changedFiles: string[]): AdvancedVerificationResult { return { adversarial: { kind: "adversarial", status: "skipped", required: false, tests: [], detail: "no adapter supplied", durationMs: 0 }, property: { kind: "property", status: "skipped", required: false, tests: [], detail: "no adapter supplied", durationMs: 0 }, mutation: { kind: "mutation", status: "skipped", required: false, changedFiles, killed: 0, survived: 0, timedOut: 0, skipped: 0, relevantSurvivors: [], score: null, detail: "no adapter supplied", durationMs: 0 }, flaky: [] }; }
 }

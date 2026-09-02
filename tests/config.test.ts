@@ -10,6 +10,8 @@ describe("harnessConfigSchema", () => {
     expect(parsed.workflow.maxReviewIterations).toBe(3);
     expect(parsed.workflow.autoMerge).toBe(false);
     expect(parsed.context.handoffThreshold).toBe(0.85);
+    expect(parsed.verification.flakyRepetitions).toBe(3);
+    expect(parsed.verification.mutationTesting).toBe("changed-files");
   });
 
   it("rejects non-loopback services", () => {

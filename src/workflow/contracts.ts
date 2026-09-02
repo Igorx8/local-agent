@@ -1,4 +1,5 @@
 import { z } from "zod";
+export { challengePlanSchema } from "../verification/types.js";
 
 export const acceptanceCriterionSchema = z.object({ id: z.string().regex(/^AC-[A-Z0-9-]+$/), requirement: z.string().min(1), status: z.enum(["pending", "proven", "failed", "blocked"]).default("pending"), evidence: z.array(z.string()).default([]) });
 export const acceptanceMatrixSchema = z.object({ criteria: z.array(acceptanceCriterionSchema).min(1), assumptions: z.array(z.string()).default([]), ambiguities: z.array(z.string()).default([]) });

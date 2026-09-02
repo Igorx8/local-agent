@@ -15,6 +15,9 @@ import { OpenCodeRoleRunner } from "./role-runner.js";
 import { WorkflowEngine, type WorkflowDependencies, type WorkflowInput } from "./engine.js";
 import { writeArtifact } from "./artifacts.js";
 import { assertChangedPathsAllowed } from "../tools/scope.js";
+import { runAdvancedVerification } from "../verification/suite.js";
+import { appendHistoricalMetric, verificationProvenance } from "../verification/historical.js";
+import { runRegressionProofAdapter } from "../verification/regression.js";
 
 export interface StartRunOptions { repository: string; requirementsFile: string; config: HarnessConfig; definitionOfDone?: string; }
 function runIdentifier(): string { return `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`; }
@@ -38,7 +41,10 @@ export async function startRun(options: StartRunOptions): Promise<RunState> {
       async preflight() { const current = await inspectRepository(worktree); if (current.dirty) throw new Error("isolated worktree became dirty before baseline"); },
       async baseline() { const evidence = await captureBaseline(options.config, worktree, artifacts); return { commit: evidence.commit, treeHash: evidence.treeHash, gates: evidence.gates, artifactPath: path.join(artifacts, "baseline.json") }; },
       async gates(iteration) { return runGates(options.config, worktree, path.join(artifacts, "gates", `iteration-${iteration}`)); },
-      async checkpoint(kind, iteration) { const files = await changedFiles(worktree); assertChangedPathsAllowed(files, options.config.scope.allowedPaths, [...options.config.scope.deniedPaths, ...options.config.security.deniedPathPatterns]); return createCheckpoint(worktree, kind, iteration); }
+      async checkpoint(kind, iteration) { const files = await changedFiles(worktree); assertChangedPathsAllowed(files, options.config.scope.allowedPaths, [...options.config.scope.deniedPaths, ...options.config.security.deniedPathPatterns]); return createCheckpoint(worktree, kind, iteration); },
+      async advancedVerification(files, challenge) { return runAdvancedVerification(options.config, worktree, artifacts, files, challenge); },
+      async regressionProof(findings, triage, defective, repaired) { return runRegressionProofAdapter(options.config, worktree, path.join(artifacts, "repairs"), findings, triage, defective.commit, repaired.commit); },
+      async recordHistorical(result) { const file = path.join(harnessRoot, "historical-metrics.jsonl"); await appendHistoricalMetric(file, { schemaVersion: 1, recordedAt: new Date().toISOString(), runId, repository, success: result.success, firstPassGateSuccess: result.firstPassGateSuccess, repairIterations: result.repairIterations, confirmedFindings: result.confirmedFindings, invalidFindings: result.invalidFindings, regressions: 0, testProvenance: verificationProvenance(result.verification), mutationScore: result.verification.mutation.score, flakyIncidents: result.verification.flaky.filter((item) => item.classification === "potentially_flaky").length, durationMs: result.durationMs }); return file; }
     };
     const input: WorkflowInput = { requirements, definitionOfDone: options.definitionOfDone ?? "All required gates pass and every acceptance criterion is proven." };
     return await new WorkflowEngine(options.config, store, roleRunner, dependencies).run(input);

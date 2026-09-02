@@ -28,6 +28,7 @@ async function setup(outputs: Record<string, unknown[]>, gateRounds = [[passedGa
   const state: RunState = { schemaVersion: 1, runId: "run-test", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 } }; await store.initialize(state);
   let gateIndex = 0; const checkpoints: string[] = [];
   const dependencies: WorkflowDependencies = { async preflight() {}, async baseline() { return { commit: "a".repeat(40), treeHash: "b".repeat(40), gates: [passedGate()], artifactPath: path.join(directory, "baseline.json") }; }, async gates() { return gateRounds[Math.min(gateIndex++, gateRounds.length - 1)] ?? []; }, async checkpoint(kind) { checkpoints.push(kind); return { commit: "c".repeat(40), treeHash: "d".repeat(40), changedFiles: ["src/x.ts"] }; } };
+  dependencies.regressionProof = async (findings, _triage, defective, repaired) => findings.map((finding) => ({ findingId: finding.id, testPath: "tests/regression.ts", defectiveCheckpoint: defective.commit, repairedCheckpoint: `${repaired.commit}-repaired`, failBefore: { exitCode: 1, expectedReasonMatched: true, evidence: "focused test failed" }, passAfter: { exitCode: 0, evidence: "focused test passed" } }));
   const roles = new FakeRoles(outputs); return { engine: new WorkflowEngine(config(), store, roles, dependencies), roles, checkpoints, store };
 }
 const baseOutputs = (): Record<string, unknown[]> => ({
@@ -38,6 +39,7 @@ const baseOutputs = (): Record<string, unknown[]> => ({
   testArchitect: [{ tests: [{ id: "OT-1", acceptanceCriteria: ["AC-X"], behaviorPartition: "valid", edgeCases: [], description: "proves behavior" }], implementationDiffInspected: false }],
   implementer: [{ summary: "implemented", filesChanged: ["src/x.ts"], testsAdded: ["tests/x.ts"], commandsRun: [], blockers: [] }],
   repositoryReviewer: [{ findings: [] }], requirementsReviewer: [{ findings: [] }], validator: [{ findings: [] }],
+  adversarialVerifier: [{ scenarios: [{ id: "ADV-1", acceptanceCriteria: ["AC-X"], category: "boundary", description: "boundary challenge", expectedBehavior: "remains correct" }] }],
   auditor: [{ acceptanceCriteria: [{ id: "AC-X", status: "proven", evidence: ["test"] }], findings: [], decision: "pass" }]
 });
 
@@ -49,6 +51,7 @@ describe("WorkflowEngine", () => {
     expect(implementation?.artifactReferences.some((item) => item.includes("oracle"))).toBe(false); expect(implementation?.prompt).not.toContain("OT-1");
     const reviews = fixture.roles.invocations.filter((item) => ["repositoryReviewer", "requirementsReviewer"].includes(item.role));
     expect(new Set(reviews.map((item) => item.role)).size).toBe(2); expect(reviews.every((item) => item.freshSession)).toBe(true);
+    expect(fixture.roles.invocations.filter((item) => item.role === "adversarialVerifier")).toHaveLength(1);
   });
   it("validates a high finding, performs one focused repair, and re-reviews", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", file: "src/x.ts", lineStart: 1, problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };
