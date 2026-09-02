@@ -1,9 +1,9 @@
 import { ActiveModelRequestError, type ModelLifecycle, type ModelStatus } from "./types.js";
 import { checkedJson, pollUntil, type FetchLike } from "./http.js";
 
-interface RouterModel { id: string; status?: { value?: string; failed?: boolean }; }
+interface RouterModel { id: string; path?: string; model?: string; status?: { value?: string; failed?: boolean; args?: string[] }; }
 interface ModelsResponse { data: RouterModel[]; }
-export interface RouterOptions { baseUrl: string; apiKey?: string; startupTimeoutMs?: number; fetcher?: FetchLike; }
+export interface RouterOptions { baseUrl: string; apiKey?: string; startupTimeoutMs?: number; fetcher?: FetchLike; expectedPaths?: Record<string, string[]>; }
 
 export class RouterModelManager implements ModelLifecycle {
   private current: ModelStatus = { state: "stopped" };
@@ -27,6 +27,12 @@ export class RouterModelManager implements ModelLifecycle {
       await pollUntil(async () => (await this.models()).some((model) => model.id === alias && model.status?.value === "loaded" && !model.status.failed), this.options.startupTimeoutMs ?? 120_000);
       const loaded = (await this.models()).filter((model) => model.status?.value === "loaded");
       if (loaded.length !== 1 || loaded[0]?.id !== alias) throw new Error(`router invariant failed: expected only ${alias} loaded`);
+      const expected = this.options.expectedPaths?.[alias];
+      if (expected) {
+        const modelArgs = loaded[0]?.status?.args; const modelIndex = modelArgs?.indexOf("--model") ?? -1;
+        const identity = loaded[0]?.path ?? loaded[0]?.model ?? (modelIndex >= 0 ? modelArgs?.[modelIndex + 1] : undefined);
+        if (!identity || !expected.includes(identity)) throw new Error(`runtime identity mismatch for ${alias}: ${identity ?? "identity unavailable"}`);
+      }
       return this.current = { alias, state: "healthy" };
     } catch (error) { this.current = { alias, state: "error", detail: error instanceof Error ? error.message : String(error) }; throw error; }
   }

@@ -4,6 +4,9 @@ runtime:
   llamaUrl: http://127.0.0.1:8080
   modelStrategy: router
   localOnly: true
+modelRegistry: ./config/models.local.yaml
+routerPreset: ./config/models.local.ini
+apiKeyEnv: LLAMA_API_KEY
 models:
   supervisor: llama.cpp/qwen36-main
   planner: llama.cpp/qwen36-main
@@ -15,11 +18,6 @@ models:
   repair: llama.cpp/qwen3-coder-impl
   adversarialVerifier: llama.cpp/devstral-repo
   auditor: llama.cpp/qwen36-main
-# Map aliases to absolute GGUF paths. doctor fingerprints these files in place.
-modelFiles: {}
-# Required by modelStrategy: process. Include --alias matching each key.
-modelProcesses: {}
-# qwen36-main: { command: llama-server, args: [--model, /absolute/path/qwen.gguf, --alias, qwen36-main, --host, 127.0.0.1, --port, "8080"] }
 workflow:
   maxReviewIterations: 3
   adaptiveReviewMaximum: 5

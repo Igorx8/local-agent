@@ -17,4 +17,10 @@ describe("router model lifecycle", () => {
     manager.beginRequest("new"); await expect(manager.ensureModel("old")).rejects.toThrow(/active/); manager.endRequest("new");
     expect((await manager.stop()).state).toBe("stopped");
   });
+
+  it("rejects a wrong runtime artifact instead of accepting a silent fallback", async () => {
+    const fetcher: FetchLike = async (input) => new Response(JSON.stringify(new URL(String(input)).pathname === "/models" ? { data: [{ id: "wanted", path: "/models/wrong.gguf", status: { value: "loaded" } }] } : { success: true }), { status: 200 });
+    const manager = new RouterModelManager({ baseUrl: "http://127.0.0.1:8080", fetcher, expectedPaths: { wanted: ["/models/right.gguf"] }, startupTimeoutMs: 20 });
+    await expect(manager.ensureModel("wanted")).rejects.toThrow(/identity mismatch/);
+  });
 });

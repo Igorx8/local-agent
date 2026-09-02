@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
+import { agentRoles, loadModelRegistry, resolveRoleAlias } from "./models/registry.js";
 
 const roleNames = ["supervisor", "planner", "testArchitect", "implementer", "repositoryReviewer", "requirementsReviewer", "validator", "repair", "adversarialVerifier", "auditor"] as const;
 const roleModelsSchema = z.object(Object.fromEntries(roleNames.map((name) => [name, z.string().min(1)])) as Record<(typeof roleNames)[number], z.ZodString>);
@@ -17,6 +18,9 @@ export const harnessConfigSchema = z.object({
     modelStrategy: z.enum(["router", "process"]).default("router"),
     localOnly: z.literal(true).default(true)
   }).refine((v) => [v.opencodeUrl, v.llamaUrl].every((url) => ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)), "localOnly requires loopback runtime URLs"),
+  modelRegistry: z.string().min(1).default("./config/models.local.yaml"),
+  routerPreset: z.string().min(1).default("./config/models.local.ini"),
+  apiKeyEnv: z.literal("LLAMA_API_KEY").default("LLAMA_API_KEY"),
   models: roleModelsSchema,
   modelFiles: z.record(z.string(), z.string()).default({}),
   modelProcesses: z.record(z.string(), z.object({ command: z.string().min(1), args: z.array(z.string()).default([]) })).default({}),
@@ -54,5 +58,11 @@ export type HarnessConfig = z.infer<typeof harnessConfigSchema>;
 
 export async function loadConfig(file: string): Promise<HarnessConfig> {
   const raw = YAML.parse(await readFile(path.resolve(file), "utf8"));
-  return harnessConfigSchema.parse(raw);
+  const config = harnessConfigSchema.parse(raw);
+  const registry = await loadModelRegistry(config.modelRegistry);
+  for (const role of agentRoles) {
+    const expected = `${registry.providerId}/${resolveRoleAlias(registry, role)}`;
+    if (config.models[role] !== expected) throw new Error(`models.${role} must be exactly ${expected}`);
+  }
+  return config;
 }

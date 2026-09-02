@@ -13,6 +13,7 @@ For IDE use, open the project you want to change and run the installed `harness`
 ```bash
 npm install
 cp config/harness.example.yaml config/harness.yaml
+npm run dev -- model prepare
 npm run check
 npm test
 npm run dev -- doctor --config config/harness.yaml
@@ -27,10 +28,10 @@ npm run dev -- status <run-id> --repo /absolute/project --json
 
 `resume` currently refuses interrupted editing stages safely; Git/session reconciliation is deliberately reserved for the recovery hardening milestone.
 
-Set absolute GGUF paths in `modelFiles`. Keep API keys in environment variables or protected files; never put secrets in YAML.
+`model prepare` resolves the three exact Hugging Face cache artifacts, fingerprints them, and generates ignored `config/models.local.yaml`, `config/models.local.ini`, and `config/opencode.local.json` files. It never downloads or substitutes a model. Export `LLAMA_API_KEY` outside the repository, then use `harness model list|status|start|switch|smoke|stop` for manual IDE diagnostics. Stable aliases—not role names—are sent to llama.cpp.
 
 The exit code is `0` only when required prerequisites pass. Missing OpenCode/llama.cpp runtimes are displayed as `BLOCKED` and exit with code `4`; invalid configuration exits with code `2`. This makes `doctor` suitable for CI/setup checks without hiding an incomplete machine setup.
 
 See [compatibility report](docs/compatibility-report.md) and [implementation plan](docs/implementation-plan.md).
 
-The optional local runtime has been validated on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, hashes, evidence, reproduction commands, and remaining production-model risks.
+The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.

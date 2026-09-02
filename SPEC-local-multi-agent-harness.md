@@ -1,7 +1,7 @@
 # Spec: Local Multi-Agent Engineering Harness
 
-Status: Consolidated Draft v1.1 for implementation  
-Revision date: 2026-09-01  
+Status: Consolidated Draft v1.2 for implementation
+Revision date: 2026-09-02
 Target implementer: Codex  
 Primary environment: Ubuntu, NVIDIA RTX 5060 Ti 16 GB, 32 GB RAM  
 Primary stack: TypeScript, Node.js 22+, OpenCode SDK, llama.cpp, Git
@@ -73,6 +73,243 @@ The harness must not treat LLM opinions as the source of truth. Tests, lint, typ
 
 Roles must be configurable. No role name may be hard-coded into the state machine.
 
+### 4.1 Installed model registry
+
+The first implementation targets the three GGUF artifacts already installed and tested on this workstation. These identifiers are normative; Codex must not infer, shorten, or silently substitute a different repository, quantization, or alias.
+
+| Stable alias | Exact Hugging Face reference | Approx. artifact size | Reasoning | Intended use |
+|---|---|---:|---|---|
+| `qwen36-main` | `unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S` | 13.7 GB | `auto`, budget 8192 | Supervisor, planning, test architecture, requirements validation, finding validation, final audit |
+| `qwen3-coder-impl` | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL` | 17.7 GB | `off` | Initial implementation and focused repairs |
+| `devstral-repo` | `bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S` | 13.55 GB | `off` | Repository review and adversarial verification |
+
+The sizes above are identification hints, not integrity checks. During Milestone 0, `harness doctor` must resolve the actual cached GGUF path or shards and record their byte sizes and SHA-256 hashes. A mismatch must be reported; it must not trigger an automatic redownload or model replacement.
+
+The canonical machine-readable registry must be stored in `config/models.local.yaml`, generated from `config/models.example.yaml`. At minimum it must preserve:
+
+```yaml
+version: 1
+providerId: llama.cpp
+baseUrl: http://127.0.0.1:8080/v1
+apiKeyEnv: LLAMA_API_KEY
+
+models:
+  qwen36-main:
+    hfRef: unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S
+    quantization: UD-IQ3_S
+    approximateArtifactGiB: 13.7
+    contextSize: 65536
+    parallel: 1
+    reasoning: auto
+    reasoningBudget: 8192
+    reasoningPreserve: true
+    roles: [supervisor, planner, testArchitect, requirementsReviewer, validator, auditor]
+
+  qwen3-coder-impl:
+    hfRef: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL
+    quantization: UD-Q4_K_XL
+    approximateArtifactGiB: 17.7
+    contextSize: 65536
+    parallel: 1
+    reasoning: off
+    roles: [implementer, repair]
+
+  devstral-repo:
+    hfRef: bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S
+    quantization: Q4_K_S
+    approximateArtifactGiB: 13.55
+    contextSize: 65536
+    parallel: 1
+    reasoning: off
+    roles: [repositoryReviewer, adversarialVerifier]
+
+commonServerArgs:
+  host: 127.0.0.1
+  port: 8080
+  noMmproj: true
+  jinja: true
+  flashAttention: auto
+  cacheTypeK: q8_0
+  cacheTypeV: q8_0
+  fit: on
+  fitTargetMiB: 2048
+```
+
+`LLAMA_API_KEY` is an environment-variable name, not a value to commit. The current local credential must be supplied outside the repository and redacted from logs.
+
+### 4.2 Stable invocation contract
+
+Every layer must use the same stable alias:
+
+| Layer | Main model example |
+|---|---|
+| Harness registry and role mapping | `qwen36-main` |
+| OpenCode model identifier | `llama.cpp/qwen36-main` |
+| llama.cpp request body | `"model": "qwen36-main"` |
+| Explicit-process `--alias` | `--alias qwen36-main` |
+| TUI, state, logs, metrics, and handoff | `qwen36-main` |
+
+The harness must never send a role name such as `planner` in the API `model` field. It must resolve `role -> stable alias -> active runtime model`. Before the first prompt of a stage, it must verify that `/v1/models` exposes the expected alias and that the returned runtime identity matches the registry manifest.
+
+An OpenAI-compatible smoke call therefore looks like:
+
+```bash
+curl -sS http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $LLAMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen36-main",
+    "messages": [{"role": "user", "content": "Reply with exactly: ok"}],
+    "temperature": 0,
+    "max_tokens": 16
+  }'
+```
+
+Replace only the JSON `model` value with `qwen3-coder-impl` or `devstral-repo` when that model is active. A request naming an inactive alias must cause the lifecycle manager to switch models first; it must not fall back to another model.
+
+### 4.3 Exact explicit-process commands
+
+The installed llama.app CLI uses `llama serve`. Milestone 0 must also detect whether a raw `llama-server` binary exists and encapsulate the difference in the process adapter. The following commands are the normative llama.app launch profiles.
+
+Common prerequisite, kept out of shell history where practical. In Bash:
+
+```bash
+test -n "$LLAMA_API_KEY" || { echo "LLAMA_API_KEY is not set" >&2; exit 1; }
+```
+
+In the user's configured Fish shell:
+
+```fish
+set -qx LLAMA_API_KEY; or begin
+    echo "LLAMA_API_KEY is not set" >&2
+    exit 1
+end
+```
+
+Main/supervisor model:
+
+```bash
+llama serve \
+  -hf unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S \
+  --alias qwen36-main \
+  --no-mmproj --host 127.0.0.1 --port 8080 \
+  --api-key "$LLAMA_API_KEY" --cors-origins localhost \
+  --ctx-size 65536 --parallel 1 --jinja \
+  --reasoning auto --reasoning-budget 8192 --reasoning-preserve \
+  --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
+  --fit on --fit-target 2048 --metrics
+```
+
+Implementation/repair model:
+
+```bash
+llama serve \
+  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL \
+  --alias qwen3-coder-impl \
+  --no-mmproj --host 127.0.0.1 --port 8080 \
+  --api-key "$LLAMA_API_KEY" --cors-origins localhost \
+  --ctx-size 65536 --parallel 1 --jinja --reasoning off \
+  --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
+  --fit on --fit-target 2048 --metrics
+```
+
+Repository-review model:
+
+```bash
+llama serve \
+  -hf bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S \
+  --alias devstral-repo \
+  --no-mmproj --host 127.0.0.1 --port 8080 \
+  --api-key "$LLAMA_API_KEY" --cors-origins localhost \
+  --ctx-size 65536 --parallel 1 --jinja --reasoning off \
+  --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
+  --fit on --fit-target 2048 --metrics
+```
+
+The process adapter must construct these commands as an argument array, never as an interpolated shell string. Before adopting a flag, `doctor` must compare it with the locally installed `llama serve --help`; version drift is an explicit compatibility failure or ADR, not permission to silently omit the setting.
+
+### 4.4 Router preset generation
+
+Router mode must retain the stable aliases. Because llama.cpp controls aliases for cached Hugging Face entries, `doctor` must resolve each installed artifact to an absolute local GGUF path and generate `config/models.local.ini`; it must not commit machine-specific absolute paths. The generated form is:
+
+```ini
+version = 1
+
+[*]
+ctx-size = 65536
+parallel = 1
+no-mmproj = true
+jinja = true
+flash-attn = auto
+cache-type-k = q8_0
+cache-type-v = q8_0
+fit = on
+fit-target = 2048
+metrics = true
+stop-timeout = 30
+
+[qwen36-main]
+model = /ABSOLUTE/RESOLVED/PATH/qwen36-main.gguf
+reasoning = auto
+reasoning-budget = 8192
+reasoning-preserve = true
+
+[qwen3-coder-impl]
+model = /ABSOLUTE/RESOLVED/PATH/qwen3-coder-impl.gguf
+reasoning = off
+
+[devstral-repo]
+model = /ABSOLUTE/RESOLVED/PATH/devstral-repo.gguf
+reasoning = off
+```
+
+Launch the router with the locally supported server entry point equivalent to:
+
+```bash
+llama-server \
+  --models-preset ./config/models.local.ini \
+  --models-max 1 --models-autoload \
+  --host 127.0.0.1 --port 8080 \
+  --api-key "$LLAMA_API_KEY" --cors-origins localhost
+```
+
+The generated preset must be validated against the installed version. If a sharded artifact cannot be represented safely by a single resolved `model` path, router mode for that artifact must be marked unsupported and the explicit-process strategy used. Do not redownload, merge, or rewrite shards automatically.
+
+### 4.5 OpenCode provider mapping
+
+The generated local OpenCode configuration must map all three stable aliases to the same local OpenAI-compatible endpoint:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "share": "disabled",
+  "autoupdate": false,
+  "enabled_providers": ["llama.cpp"],
+  "provider": {
+    "llama.cpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local llama.cpp",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "{env:LLAMA_API_KEY}"
+      },
+      "models": {
+        "qwen36-main": {"name": "Qwen3.6 35B A3B UD-IQ3_S"},
+        "qwen3-coder-impl": {"name": "Qwen3 Coder 30B A3B UD-Q4_K_XL"},
+        "devstral-repo": {"name": "Devstral Small 2 24B Q4_K_S"}
+      }
+    }
+  },
+  "compaction": {
+    "auto": false,
+    "prune": true,
+    "reserved": 10000
+  }
+}
+```
+
+Agent definitions then select exactly `llama.cpp/qwen36-main`, `llama.cpp/qwen3-coder-impl`, or `llama.cpp/devstral-repo` according to the role table. The configuration generator must merge these fields with project configuration without deleting unrelated user settings.
+
 ## 5. High-level architecture
 
 Components:
@@ -123,7 +360,10 @@ local-agent-harness/
 ├── AGENTS.md
 ├── config/
 │   ├── harness.example.yaml
-│   ├── models.example.ini
+│   ├── models.example.yaml
+│   ├── models.local.yaml       # generated, ignored by Git
+│   ├── models.local.ini        # generated router preset, ignored by Git
+│   ├── opencode.example.json
 │   └── command-policy.example.yaml
 ├── prompts/
 │   ├── supervisor.md
@@ -293,7 +533,7 @@ Required capabilities:
 
 ### 9.2 OpenCode local-only configuration
 
-Generate a documented example configuration with:
+Generate the complete provider mapping defined in Section 4.5. Its local-only and compaction portion must include:
 
 ```json
 {
@@ -341,6 +581,8 @@ Use a llama.cpp preset file with:
 - metrics enabled;
 - one slot per large model workload.
 
+The router preset and stable-alias mapping must be generated exactly as specified in Section 4.4.
+
 Before a stage begins, request the required model and verify:
 
 - router health;
@@ -361,6 +603,8 @@ Fallback if router unload behavior is unreliable. The manager must:
 6. verify `/v1/models` contains the expected alias;
 7. retry startup once;
 8. fail safely with logs if the model cannot load.
+
+The selected launch profile must come from the registry in Section 4.1 and produce the effective arguments in Section 4.3. Neither the workflow nor an LLM may invent a model command.
 
 Never stop a model while an OpenCode response is still streaming.
 
@@ -950,6 +1194,10 @@ runtime:
   modelStrategy: router
   localOnly: true
 
+modelRegistry: ./config/models.local.yaml
+routerPreset: ./config/models.local.ini
+apiKeyEnv: LLAMA_API_KEY
+
 models:
   supervisor: llama.cpp/qwen36-main
   planner: llama.cpp/qwen36-main
@@ -1045,10 +1293,18 @@ harness run --repo <path> --requirements <file>
 harness resume <run-id>
 harness status [run-id]
 harness logs <run-id> --follow
+harness model list
+harness model status
+harness model start <qwen36-main|qwen3-coder-impl|devstral-repo>
+harness model switch <qwen36-main|qwen3-coder-impl|devstral-repo>
+harness model smoke <qwen36-main|qwen3-coder-impl|devstral-repo>
+harness model stop
 harness handoff <run-id>
 harness abort <run-id>
 harness report <run-id>
 ```
+
+`model start` and `model switch` accept only registry aliases, resolve the corresponding exact artifact and launch profile, and block until identity and health checks pass. `model smoke` performs a minimal completion and a tool-call capability check without granting repository write access. Normal autonomous runs invoke these same lifecycle operations internally; these commands exist for diagnostics and visual/manual verification.
 
 `doctor` must validate:
 
@@ -1148,6 +1404,17 @@ Suggested exit codes:
 - AC-041: Historical metrics record first-pass success, repair count, confirmed and invalid findings, regressions, diff churn, gate results, mutation score, duration, token usage, handoffs, and human interventions where available.
 - AC-042: The handoff bootstrap verifies both repository state and semantic understanding before continuing.
 
+### Installed-model identity and invocation
+
+- AC-043: The model registry contains the exact three Hugging Face references, quantizations, stable aliases, context settings, reasoning modes, and role mappings defined in Section 4.1.
+- AC-044: OpenCode, llama.cpp requests, persisted state, telemetry, and handoffs use the same stable alias for a model.
+- AC-045: `doctor` resolves and fingerprints every installed GGUF artifact and refuses silent model or quantization substitution.
+- AC-046: Explicit-process mode starts each model with the effective launch profile defined in Section 4.3 and verifies the alias through `/v1/models` plus a smoke completion.
+- AC-047: Router mode exposes the three stable aliases, keeps at most one large model loaded, and demonstrably switches between all three aliases; otherwise the harness falls back safely to explicit-process mode.
+- AC-048: Each OpenCode role selects the exact `llama.cpp/<stable-alias>` identifier defined by the role mapping.
+- AC-049: API credentials are obtained through `LLAMA_API_KEY`, are never committed, and are redacted from process logs, state, reports, and handoffs.
+- AC-050: Unknown, inactive, mismatched, or unavailable model aliases fail closed and never route to a default model.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1168,6 +1435,8 @@ Suggested exit codes:
 - command allow/deny matching;
 - secret redaction;
 - model lifecycle state transitions;
+- model-registry validation, role-to-alias resolution, and rejection of unknown aliases;
+- generation of explicit command argument arrays and router presets from registry fixtures;
 - TUI reducers independent of rendering.
 
 ### Integration tests
@@ -1175,6 +1444,7 @@ Suggested exit codes:
 - temporary Git repository with isolated worktree;
 - fake OpenCode server with SSE event fixtures;
 - fake llama.cpp endpoints with model loading delays and failures;
+- fake `/v1/models` responses covering correct alias, wrong artifact, missing alias, and silent-fallback attempts;
 - passing, failing, and timed-out quality gates;
 - model switch while GPU release is delayed;
 - context threshold causing new-session bootstrap;
@@ -1200,15 +1470,19 @@ Suggested exit codes:
 7. Task with a deliberately flaky test to verify classification.
 8. Forced low context window to trigger and semantically validate handoff quickly.
 9. Full local run using the three configured GGUF models.
+10. Sequential smoke run proving `qwen36-main -> qwen3-coder-impl -> devstral-repo -> qwen36-main`, with only one loaded model and the expected alias recorded for every response.
 
 ## 24. Implementation milestones
 
 ### Milestone 0: discovery spike
 
 - Inspect installed OpenCode and llama.cpp versions.
+- Verify the installed server entry points (`llama serve` and, if present, `llama-server`) and compare every required launch flag with local `--help` output.
 - Confirm actual SDK message token fields and SSE event shapes.
 - Confirm router model switching and unloading on this machine.
-- Confirm model file locations and calculate reproducible fingerprints without duplicating model data.
+- Resolve the three exact Hugging Face references in Section 4.1 to their cached GGUF path or shards and calculate reproducible fingerprints without duplicating model data.
+- Generate and validate the local model registry, router preset, OpenCode provider mapping, and role-to-alias resolution.
+- Smoke-call each stable alias and prove tool calling for every model assigned to an agentic role.
 - Identify project-appropriate property, mutation, coverage, and flaky-test capabilities.
 - Record compatibility decisions; do not guess undocumented runtime fields.
 
@@ -1253,17 +1527,18 @@ Each milestone must leave the repository testable and committed. Codex must not 
 3. Keep changes milestone-scoped and create small commits.
 4. Add tests before or with every behavior.
 5. Do not invent SDK fields; inspect installed types or the local OpenAPI document.
-6. Prefer documented OpenCode APIs and llama.cpp endpoints.
-7. Use adapters for unstable or version-dependent behavior.
-8. Never weaken safety checks merely to make an E2E test pass.
-9. Record deviations from this spec in an ADR.
-10. Stop and request a decision only for destructive, security-sensitive, or materially ambiguous choices.
-11. Never use test quantity as a proxy for behavioral coverage.
-12. Never allow a model to validate its own implementation without independent evidence.
-13. Do not grant an additional repair iteration without deterministic progress evidence.
-14. Preserve failed checkpoints long enough to prove regression tests fail before repairs.
-15. Keep oracle tests isolated from the initial implementation session.
-16. Pin and report runtime, model, prompt, sampling, and gate identities for every E2E result.
+6. Do not invent, rename, or substitute model aliases, Hugging Face references, quantizations, or server flags; validate them against Section 4 and the installed runtime.
+7. Prefer documented OpenCode APIs and llama.cpp endpoints.
+8. Use adapters for unstable or version-dependent behavior.
+9. Never weaken safety checks merely to make an E2E test pass.
+10. Record deviations from this spec in an ADR.
+11. Stop and request a decision only for destructive, security-sensitive, or materially ambiguous choices.
+12. Never use test quantity as a proxy for behavioral coverage.
+13. Never allow a model to validate its own implementation without independent evidence.
+14. Do not grant an additional repair iteration without deterministic progress evidence.
+15. Preserve failed checkpoints long enough to prove regression tests fail before repairs.
+16. Keep oracle tests isolated from the initial implementation session.
+17. Pin and report runtime, model, prompt, sampling, and gate identities for every E2E result.
 
 ## 26. Initial Codex prompt
 
@@ -1277,9 +1552,13 @@ First:
 2. verify the local OpenCode OpenAPI/SDK types instead of assuming undocumented fields;
 3. verify how token usage is exposed;
 4. verify whether llama.cpp router mode unloads the previous model with models-max=1;
-5. locate and fingerprint the configured GGUF files without copying them;
-6. identify available baseline, property-based, mutation, coverage, and flaky-test tooling;
-7. produce a short compatibility report and an implementation plan mapped to AC IDs.
+5. locate and fingerprint these exact installed artifacts without copying them:
+   - qwen36-main = unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S;
+   - qwen3-coder-impl = unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL;
+   - devstral-repo = bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S;
+6. validate the Section 4 launch profiles against the installed CLI and smoke-call every alias;
+7. identify available baseline, property-based, mutation, coverage, and flaky-test tooling;
+8. produce a short compatibility report and an implementation plan mapped to AC IDs.
 
 Then implement the project foundation: CLI skeleton, validated configuration, atomic state store, structured logging, run locking, and the doctor command. Add unit tests and documentation.
 

@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { runDoctor } from "./doctor.js";
 import { readRun, startRun } from "./workflow/run.js";
+import { loadModelRegistry, requireAlias } from "./models/registry.js";
+import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
+import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
 
 const program = new Command().name("harness").description("Local multi-agent engineering harness").version("0.1.0");
 
@@ -49,5 +52,25 @@ program.command("resume").description("Inspect a persisted run before recovery s
   if (state.status === "succeeded" || state.status === "failed" || state.status === "escalated") { process.stdout.write(`${JSON.stringify(state, null, 2)}\n`); return; }
   throw new Error(`run ${runId} stopped at ${state.stage}; editing-stage reconciliation is scheduled for Milestone 8 and automatic resume is refused safely`);
 });
+
+const model = program.command("model").description("Inspect and control registered local models");
+model.command("prepare").description("Generate ignored local model configuration").option("--no-fingerprint", "skip SHA-256 calculation").action(async (options) => {
+  const cacheRoot = process.env.HF_HOME ? path.join(process.env.HF_HOME, "hub") : path.join(process.env.HOME ?? "", ".cache", "huggingface", "hub");
+  await prepareLocalModels({ exampleFile: "config/models.example.yaml", registryFile: "config/models.local.yaml", presetFile: "config/models.local.ini", cacheRoot, fingerprint: options.fingerprint });
+  await mergeOpenCodeLocal("config/opencode.example.json", "config/opencode.local.json"); process.stdout.write("Generated local model registry, router preset, and OpenCode mapping.\n");
+});
+model.command("list").description("List exact registry aliases").option("-r, --registry <file>", "registry", "config/models.local.yaml").action(async (options) => {
+  const registry = await loadModelRegistry(options.registry); for (const [alias, entry] of Object.entries(registry.models)) process.stdout.write(`${alias}\t${entry.hfRef}\t${entry.roles.join(",")}\n`);
+});
+model.command("status").description("Show managed process and advertised aliases").option("-r, --registry <file>", "registry", "config/models.local.yaml").action(async (options) => {
+  const registry = await loadModelRegistry(options.registry); process.stdout.write(`${JSON.stringify({ process: await readModelRuntime(process.cwd()), aliases: await runtimeAliases(registry).catch(() => []) }, null, 2)}\n`);
+});
+for (const operation of ["start", "switch"] as const) model.command(operation).argument("<alias>").option("-r, --registry <file>", "registry", "config/models.local.yaml").action(async (alias, options) => {
+  const registry = await loadModelRegistry(options.registry); requireAlias(registry, alias); process.stdout.write(`${JSON.stringify(await startLocalModel(process.cwd(), registry, alias), null, 2)}\n`);
+});
+model.command("smoke").argument("<alias>").option("-r, --registry <file>", "registry", "config/models.local.yaml").action(async (alias, options) => {
+  const registry = await loadModelRegistry(options.registry); const result = await smokeModel(registry, alias); process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); if (!result.completion || !result.toolCall) process.exitCode = 5;
+});
+model.command("stop").action(async () => { await stopLocalModel(process.cwd()); process.stdout.write("Model stopped.\n"); });
 
 program.parseAsync().catch((error) => { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 2; });

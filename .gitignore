@@ -3,4 +3,7 @@ dist/
 coverage/
 .agent-harness/
 .local-runtime/
+config/models.local.yaml
+config/models.local.ini
+config/opencode.local.json
 *.log

@@ -4,6 +4,7 @@ import type { HarnessConfig } from "../config.js";
 import { connectOpencode } from "../opencode/client.js";
 import { OpencodeSessions } from "../opencode/sessions.js";
 import { createModelManager } from "../models/manager.js";
+import { loadModelRegistry } from "../models/registry.js";
 import { changedFiles, createWorktree, inspectRepository, preflight } from "../git/workspace.js";
 import { createCheckpoint } from "../git/checkpoints.js";
 import { captureBaseline } from "../tools/baseline.js";
@@ -31,7 +32,7 @@ export async function startRun(options: StartRunOptions): Promise<RunState> {
     await writeArtifact(artifacts, "config.snapshot.json", options.config);
     const requirements = await readFile(path.resolve(options.requirementsFile), "utf8"); await writeArtifact(artifacts, "requirements.json", { source: path.resolve(options.requirementsFile), content: requirements });
     const client = connectOpencode({ baseUrl: options.config.runtime.opencodeUrl, directory: worktree }); const sessions = new OpencodeSessions(client, worktree);
-    const manager = createModelManager(options.config, { router: {}, process: {} });
+    const manager = createModelManager(options.config, { registry: await loadModelRegistry(options.config.modelRegistry), router: {}, process: {} });
     const roleRunner = new OpenCodeRoleRunner(sessions, manager, options.config, async (role, sessionID) => { await writeArtifact(artifacts, `sessions/${Date.now()}-${role}-${sessionID}.json`, { role, sessionID, createdAt: new Date().toISOString() }); });
     const dependencies: WorkflowDependencies = {
       async preflight() { const current = await inspectRepository(worktree); if (current.dirty) throw new Error("isolated worktree became dirty before baseline"); },

@@ -4,6 +4,8 @@ import { access, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import type { HarnessConfig } from "./config.js";
 import { validateCommand } from "./tools/policy.js";
+import { loadModelRegistry, resolveCachedArtifact } from "./models/registry.js";
+import { requiredServerFlags, unsupportedFlags } from "./models/profiles.js";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "blocked";
 export interface DoctorCheck { name: string; status: CheckStatus; detail: string; }
@@ -47,6 +49,23 @@ export async function runDoctor(config: HarnessConfig): Promise<DoctorReport> {
   checks.push(await endpoint("OpenCode health/API", config.runtime.opencodeUrl));
   checks.push(await endpoint("llama.cpp health", new URL("/health", config.runtime.llamaUrl).toString()));
   checks.push(...await Promise.all(Object.entries(config.modelFiles).map(([alias, file]) => fingerprint(alias, file))));
+  try {
+    const registry = await loadModelRegistry(config.modelRegistry);
+    checks.push({ name: "model registry", status: "pass", detail: `${Object.keys(registry.models).length} exact aliases; provider ${registry.providerId}; credential ${registry.apiKeyEnv}` });
+    const cacheRoot = process.env.HF_HOME ? `${process.env.HF_HOME}/hub` : `${process.env.HOME}/.cache/huggingface/hub`;
+    for (const [alias, model] of Object.entries(registry.models)) {
+      try {
+        const artifact = await resolveCachedArtifact(alias, model, cacheRoot, false);
+        checks.push({ name: `model:${alias}`, status: "pass", detail: `${model.hfRef}; ${artifact.paths.join(", ")}; ${artifact.bytes.join("+")} bytes` });
+      } catch (error) { checks.push({ name: `model:${alias}`, status: "fail", detail: error instanceof Error ? error.message : String(error) }); }
+    }
+  } catch (error) { checks.push({ name: "model registry", status: "fail", detail: error instanceof Error ? error.message : String(error) }); }
+  const llamaServeHelp = await command("llama", ["serve", "--help"]);
+  const rawServerHelp = await command("llama-server", ["--help"]);
+  for (const [name, result] of [["llama serve flags", llamaServeHelp], ["llama-server flags", rawServerHelp]] as const) {
+    if (result.code !== 0) checks.push({ name, status: name.startsWith("llama serve") ? "fail" : "warn", detail: result.output || "entry point unavailable" });
+    else { const missing = unsupportedFlags(result.output); checks.push({ name, status: missing.length ? "fail" : "pass", detail: missing.length ? `unsupported required flags: ${missing.join(", ")}` : `${requiredServerFlags.length} required flags supported` }); }
+  }
   try {
     for (const gate of Object.values(config.quality)) if (gate) validateCommand(gate);
     checks.push({ name: "repository command policy", status: "pass", detail: `${Object.values(config.quality).filter(Boolean).length} configured command(s) validated as executable + argv` });
