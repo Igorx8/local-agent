@@ -58,6 +58,6 @@ node scripts/process-smoke.mjs
 
 These scripts are manual integration checks and intentionally remain outside the default unit-test gate because they require installed runtimes, a local model, network ports, and an NVIDIA GPU.
 
-## Remaining risk
+## Full workflow follow-up
 
-The remaining runtime-dependent check is a full OpenCode engineering workflow using all role assignments. `doctor` reports service checks as blocked whenever OpenCode and llama.cpp are intentionally stopped; this is expected outside an active run.
+The remaining multi-model check was completed on 2026-09-03. See [Milestone 10 live E2E](milestone-10-live-e2e.md) for the successful audited run and the runtime hardening discovered during it. `doctor` still reports service checks as blocked whenever OpenCode and llama.cpp are intentionally stopped; this is expected outside an active run.

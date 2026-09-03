@@ -20,7 +20,7 @@ export const modelRegistrySchema = z.object({
   version: z.literal(1), providerId: z.literal("llama.cpp"), baseUrl: z.string().url().refine((url) => ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname), "baseUrl must use loopback"),
   apiKeyEnv: z.literal("LLAMA_API_KEY"), models: z.record(z.string().min(1), modelSchema),
   artifacts: z.record(z.string(), z.object({ paths: z.array(z.string().min(1)).min(1), bytes: z.array(z.number().int().nonnegative()).min(1), sha256: z.array(z.string().regex(/^[a-f0-9]{64}$/)).min(1) })).optional(),
-  commonServerArgs: z.object({ host: z.literal("127.0.0.1"), port: z.number().int().positive(), noMmproj: z.literal(true), jinja: z.literal(true), flashAttention: z.literal("auto"), cacheTypeK: z.literal("q8_0"), cacheTypeV: z.literal("q8_0"), fit: z.literal("on"), fitTargetMiB: z.number().int().positive() })
+  commonServerArgs: z.object({ host: z.literal("127.0.0.1"), port: z.number().int().positive(), noMmproj: z.literal(true), jinja: z.literal(true), flashAttention: z.literal("auto"), cacheTypeK: z.literal("q8_0"), cacheTypeV: z.literal("q8_0"), fit: z.literal("on"), fitTargetMiB: z.number().int().positive(), loadMode: z.literal("none").default("none") })
 }).superRefine((registry, context) => {
   const owners = new Map<string, string>();
   for (const [alias, model] of Object.entries(registry.models)) for (const role of model.roles) {
@@ -78,7 +78,7 @@ export async function writeAtomic(file: string, contents: string): Promise<void>
 
 export function renderRouterPreset(registry: ModelRegistry, artifacts: Record<string, ResolvedArtifact>): string {
   const common = registry.commonServerArgs;
-  const lines = ["version = 1", "", "[*]", `ctx-size = ${Object.values(registry.models)[0]?.contextSize ?? 65536}`, "parallel = 1", "no-mmproj = true", "jinja = true", `flash-attn = ${common.flashAttention}`, `cache-type-k = ${common.cacheTypeK}`, `cache-type-v = ${common.cacheTypeV}`, `fit = ${common.fit}`, `fit-target = ${common.fitTargetMiB}`, "metrics = true", "stop-timeout = 30"];
+  const lines = ["version = 1", "", "[*]", `ctx-size = ${Object.values(registry.models)[0]?.contextSize ?? 65536}`, "parallel = 1", "no-mmproj = true", "jinja = true", `load-mode = ${common.loadMode}`, `flash-attn = ${common.flashAttention}`, `cache-type-k = ${common.cacheTypeK}`, `cache-type-v = ${common.cacheTypeV}`, `fit = ${common.fit}`, `fit-target = ${common.fitTargetMiB}`, "metrics = true", "stop-timeout = 30"];
   for (const [alias, model] of Object.entries(registry.models)) {
     const artifact = artifacts[alias]; if (!artifact || artifact.paths.length !== 1) throw new Error(`${alias}: router mode requires exactly one resolved GGUF artifact`);
     lines.push("", `[${alias}]`, `model = ${artifact.paths[0]}`, `reasoning = ${model.reasoning}`);

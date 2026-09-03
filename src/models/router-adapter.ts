@@ -22,14 +22,14 @@ export class RouterModelManager implements ModelLifecycle {
     this.current = { alias, state: "loading" };
     try {
       const models = await this.models();
-      const previous = models.filter((item) => item.id !== alias && item.status?.value === "loaded");
-      for (const model of previous) await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: model.id }) });
-      if (previous.length) {
+      const loadedBefore = models.filter((item) => item.status?.value === "loaded"); const targetAlreadyExclusive = loadedBefore.length === 1 && loadedBefore[0]?.id === alias && !loadedBefore[0]?.status?.failed;
+      if (!targetAlreadyExclusive && loadedBefore.length) {
+        for (const model of loadedBefore) await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: model.id }) });
         const timeout = this.options.shutdownTimeoutMs ?? 30_000;
-        await pollUntil(async () => (await this.models()).every((model) => model.id === alias || model.status?.value !== "loaded"), timeout);
+        await pollUntil(async () => (await this.models()).every((model) => model.status?.value !== "loaded"), timeout);
         if (this.options.releaseProbe) await pollUntil(this.options.releaseProbe, timeout);
       }
-      await checkedJson(this.fetcher, this.url("/models/load"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: alias }) });
+      if (!targetAlreadyExclusive) await checkedJson(this.fetcher, this.url("/models/load"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: alias }) });
       await pollUntil(async () => (await this.models()).some((model) => model.id === alias && model.status?.value === "loaded" && !model.status.failed), this.options.startupTimeoutMs ?? 120_000);
       const loaded = (await this.models()).filter((model) => model.status?.value === "loaded");
       if (loaded.length !== 1 || loaded[0]?.id !== alias) throw new Error(`router invariant failed: expected only ${alias} loaded`);

@@ -21,7 +21,19 @@ export type Finding = z.infer<typeof findingSchema>;
 export type Review = z.infer<typeof reviewSchema>;
 
 export const findingClassificationSchema = z.enum(["confirmed", "invalid", "style_preference", "out_of_scope", "requires_human_decision"]);
-export const triageSchema = z.object({ findings: z.array(z.object({ findingId: z.string(), classification: findingClassificationSchema, evidence: z.string().min(1), rootCause: z.string().min(1), testable: z.boolean(), regressionTestExemption: z.string().optional() })) });
+export const triageFindingSchema = z.object({
+  findingId: z.string(),
+  classification: findingClassificationSchema,
+  evidence: z.string().min(1),
+  rootCause: z.string().min(1),
+  testable: z.boolean(),
+  regressionTestExemption: z.string().optional().describe("Required and non-empty when classification is confirmed and testable is false; explain why no regression test can be added."),
+}).superRefine((finding, context) => {
+  if (finding.classification === "confirmed" && finding.testable === false && !finding.regressionTestExemption?.trim()) {
+    context.addIssue({ code: "custom", path: ["regressionTestExemption"], message: "confirmed non-testable findings require a regression-test exemption" });
+  }
+});
+export const triageSchema = z.object({ findings: z.array(triageFindingSchema) });
 export type Triage = z.infer<typeof triageSchema>;
 
 export const auditSchema = z.object({ acceptanceCriteria: z.array(z.object({ id: z.string(), status: z.enum(["proven", "failed", "blocked"]), evidence: z.array(z.string()) })), findings: z.array(findingSchema), decision: z.enum(["pass", "fail", "requires_human_decision"]) });

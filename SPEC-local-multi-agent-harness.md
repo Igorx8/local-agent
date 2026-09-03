@@ -133,6 +133,7 @@ commonServerArgs:
   cacheTypeV: q8_0
   fit: on
   fitTargetMiB: 2048
+  loadMode: none
 ```
 
 `LLAMA_API_KEY` is an environment-variable name, not a value to commit. The current local credential must be supplied outside the repository and redacted from logs.
@@ -194,7 +195,7 @@ llama serve \
   --alias qwen36-main \
   --no-mmproj --host 127.0.0.1 --port 8080 \
   --api-key "$LLAMA_API_KEY" --cors-origins localhost \
-  --ctx-size 65536 --parallel 1 --jinja \
+  --ctx-size 65536 --parallel 1 --jinja --load-mode none \
   --reasoning auto --reasoning-budget 8192 --reasoning-preserve \
   --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
   --fit on --fit-target 2048 --metrics
@@ -208,7 +209,7 @@ llama serve \
   --alias qwen3-coder-impl \
   --no-mmproj --host 127.0.0.1 --port 8080 \
   --api-key "$LLAMA_API_KEY" --cors-origins localhost \
-  --ctx-size 65536 --parallel 1 --jinja --reasoning off \
+  --ctx-size 65536 --parallel 1 --jinja --load-mode none --reasoning off \
   --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
   --fit on --fit-target 2048 --metrics
 ```
@@ -221,7 +222,7 @@ llama serve \
   --alias devstral-repo \
   --no-mmproj --host 127.0.0.1 --port 8080 \
   --api-key "$LLAMA_API_KEY" --cors-origins localhost \
-  --ctx-size 65536 --parallel 1 --jinja --reasoning off \
+  --ctx-size 65536 --parallel 1 --jinja --load-mode none --reasoning off \
   --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
   --fit on --fit-target 2048 --metrics
 ```
@@ -240,6 +241,7 @@ ctx-size = 65536
 parallel = 1
 no-mmproj = true
 jinja = true
+load-mode = none
 flash-attn = auto
 cache-type-k = q8_0
 cache-type-v = q8_0

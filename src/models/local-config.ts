@@ -12,6 +12,6 @@ export async function mergeOpenCodeLocal(exampleFile: string, destination: strin
   let existing: Record<string, unknown> = {};
   try { existing = JSON.parse(await readFile(destination, "utf8")) as Record<string, unknown>; } catch { /* generated file may not exist yet */ }
   const required = JSON.parse(await readFile(exampleFile, "utf8")) as Record<string, unknown>;
-  const merged = { ...existing, ...required, provider: { ...(existing.provider as object ?? {}), ...(required.provider as object ?? {}) } };
+  const merged = { ...existing, ...required, provider: { ...(existing.provider as object ?? {}), ...(required.provider as object ?? {}) }, agent: { ...(existing.agent as object ?? {}), ...(required.agent as object ?? {}) } };
   await writeAtomic(path.resolve(destination), `${JSON.stringify(merged, null, 2)}\n`);
 }

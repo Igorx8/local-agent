@@ -27,6 +27,14 @@ describe("router model lifecycle", () => {
     expect(loadRequests).toBe(0);
   });
 
+  it("reuses an already exclusive healthy alias without issuing another load", async () => {
+    let loads = 0; const fetcher: FetchLike = async (input) => { const route = new URL(String(input)).pathname; if (route === "/models/load") loads++; return new Response(JSON.stringify(route === "/models" ? { data: [{ id: "wanted", path: "/models/right.gguf", status: { value: "loaded" } }] } : { success: true }), { status: 200 }); };
+    const manager = new RouterModelManager({ baseUrl: "http://127.0.0.1:8080", fetcher, expectedPaths: { wanted: ["/models/right.gguf"] } });
+    expect(await manager.ensureModel("wanted")).toMatchObject({ alias: "wanted", state: "healthy" });
+    expect(await manager.ensureModel("wanted")).toMatchObject({ alias: "wanted", state: "healthy" });
+    expect(loads).toBe(0);
+  });
+
   it("rejects a wrong runtime artifact instead of accepting a silent fallback", async () => {
     const fetcher: FetchLike = async (input) => new Response(JSON.stringify(new URL(String(input)).pathname === "/models" ? { data: [{ id: "wanted", path: "/models/wrong.gguf", status: { value: "loaded" } }] } : { success: true }), { status: 200 });
     const manager = new RouterModelManager({ baseUrl: "http://127.0.0.1:8080", fetcher, expectedPaths: { wanted: ["/models/right.gguf"] }, startupTimeoutMs: 20 });

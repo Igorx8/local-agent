@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–9 are implemented, including persistent workspace conversations on top of the audited, isolated workflow runs.
+Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–10 are implemented, including persistent workspace conversations, audited isolated runs, and strict single-model GPU residency.
 
 ## Where it runs
 

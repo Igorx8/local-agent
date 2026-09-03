@@ -41,3 +41,4 @@ commonServerArgs:
   cacheTypeV: q8_0
   fit: on
   fitTargetMiB: 2048
+  loadMode: none
