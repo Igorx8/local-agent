@@ -15,6 +15,6 @@ The handoff remains correct because `WorkflowEngine.invoke` waits for the model 
 
 All production profiles use llama.cpp `--load-mode none`. Live validation found a kernel bad-page-map failure while unmapping a memory-mapped GGUF after an otherwise orderly single-model switch. Disabling mmap-backed model loading avoids retaining problematic file mappings during repeated unload/load cycles on this host. This complements, rather than replaces, the unload and VRAM barriers.
 
-OpenCode roles also have explicit `maxSteps` limits, deny doom loops, disable nested `task` delegation, and disable `todowrite`. Workflow planning and state belong to the harness; allowing local models to maintain a second task list caused bounded roles to loop instead of returning their output contract.
+OpenCode roles also have explicit `maxSteps` limits, deny doom loops, disable nested `task` delegation, `todowrite`, `webfetch`, and external skills. Workflow planning and state belong to the harness; allowing local models to maintain a second task list caused bounded roles to loop instead of returning their output contract. Network/tool discovery is unnecessary for these repository-local roles and is denied explicitly.
 
 Tests cover delayed VRAM release ordering, refusal to issue the next load after release timeout, process exit/release before launch, prohibition while a request is active, and final workflow cleanup failure.

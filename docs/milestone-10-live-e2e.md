@@ -14,7 +14,7 @@ Observed model sequence included `qwen36-main -> qwen3-coder-impl -> devstral-re
 - Every harness role is installed as an explicit OpenCode agent; only implementer and repair receive mutation tools, and nested delegation is disabled.
 - Every structured prompt includes the exact generated JSON Schema. Triage rejects a confirmed non-testable finding without a non-empty regression-test exemption while still inside inference retry handling.
 - Production profiles use `--load-mode none`. The previous boot journal recorded a kernel `Bad page map in process llama-server` while unmapping the Qwen coder GGUF, followed by an invalid swap entry. Router state at that instant showed only Devstral loaded, so the freeze was not simultaneous model residency.
-- OpenCode roles have finite step limits, doom-loop denial, and no `todowrite`. An interrupted pre-fix auditor reached more than 280 tool-loop steps; the successful final auditor returned in about 62 seconds under the bounded configuration.
+- OpenCode roles have finite step limits, doom-loop denial, and no `todowrite`. An interrupted pre-fix auditor reached more than 280 tool-loop steps; the successful final auditor returned in about 62 seconds under the bounded configuration. The final log audit also found unnecessary `webfetch` and skill-discovery attempts, so both tools are now explicitly disabled for every local role.
 - An already accepted OpenCode request must be explicitly aborted when a client is force-stopped; unloading its model alone does not cancel the server-side session. The interrupted validation sessions were explicitly aborted and their models unloaded before subsequent runs.
 
 ## Evidence and limits
