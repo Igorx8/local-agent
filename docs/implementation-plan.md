@@ -7,7 +7,7 @@
 - Milestone 4 — bounded workflow and independent review. Implemented deterministic core for AC-001, AC-004–AC-006, AC-026 and AC-029–AC-034.
 - Milestone 5 — regression/adversarial/property/mutation/flaky verification. Implemented normalized project adapters, fail-before/pass-after proof validation, acceptance-relevant mutant blocking, isolated flaky classification, provenance mapping, and append-only metrics for AC-027, AC-028, AC-031, AC-035–AC-037 and AC-041.
 - Milestone 6 — context accounting and validated handoff. Implemented latest-prompt provenance, role turn projection, effective thresholds, mutating-action guard, deterministic/semantic handoff separation, validation retry, read-only bootstrap, persisted session relationships, manual requests, and emergency compaction fallback for AC-008–AC-015 and AC-042. Crash reconciliation remains Milestone 8 for AC-022.
-- Milestone 7 — TUI and non-TTY observability. Implements AC-016–AC-018.
+- Milestone 7 — TUI and non-TTY observability. Implemented normalized snapshots, bounded JSONL events, Ink rendering, optional NVIDIA telemetry, RAM/swap/runtime PID metrics, baseline/current gate attribution, review/progress/mutation/flaky summaries, latest-run discovery, structured non-TTY output, and followable logs for AC-016–AC-018.
 - Milestone 8 — recovery, E2E, security and reproducibility hardening. Completes AC-021–AC-023 and AC-039–AC-041.
 
 Milestones 7–8 are intentionally not implemented yet.

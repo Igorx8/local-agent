@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation reaches Milestone 6: typed local runtimes, deterministic engineering and verification workflows, exact/estimated context accounting, projected-overflow handoffs, validated session bootstrap, and emergency compaction continuity.
+Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation reaches Milestone 7: typed local runtimes, deterministic engineering and verification workflows, context continuity, structured event telemetry, machine metrics, and an observational Ink dashboard with non-TTY fallback.
 
 ## Where it runs
 
@@ -24,6 +24,8 @@ With OpenCode and the llama.cpp router already running and the production model 
 ```bash
 npm run dev -- run --repo /absolute/project --requirements /absolute/requirements.md --config config/harness.yaml
 npm run dev -- status <run-id> --repo /absolute/project --json
+npm run dev -- status --repo /absolute/project --no-tui
+npm run dev -- logs <run-id> --repo /absolute/project --follow
 ```
 
 `resume` currently refuses interrupted editing stages safely; Git/session reconciliation is deliberately reserved for the recovery hardening milestone.
@@ -39,5 +41,7 @@ See [compatibility report](docs/compatibility-report.md) and [implementation pla
 Project-specific advanced verification commands use normalized, fail-closed adapters documented in [Milestone 5 advanced verification](docs/milestone-5-verification.md). The harness never guesses a test or mutation tool for the target repository.
 
 Context accounting, deterministic Markdown handoffs, semantic abstraction boundaries, bootstrap verification, and the emergency compaction fallback are documented in [Milestone 6 context continuity](docs/milestone-6-context-continuity.md).
+
+Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage are documented in [Milestone 7 visual feedback](docs/milestone-7-visual-feedback.md).
 
 The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.

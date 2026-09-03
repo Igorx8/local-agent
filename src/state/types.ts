@@ -17,11 +17,12 @@ export const runStateSchema = z.object({
   acceptanceCriteriaArtifact: z.string().optional(),
   oracleTestsArtifact: z.string().optional(),
   historicalMetricsArtifact: z.string().optional(),
-  context: z.object({ latestPromptTokens: z.number().int().nonnegative(), contextWindow: z.number().int().positive(), usage: z.number().min(0), provenance: z.enum(["exact", "estimated"]), source: z.string(), reason: z.string().optional() }).optional(),
+  context: z.object({ latestPromptTokens: z.number().int().nonnegative(), contextWindow: z.number().int().positive(), usage: z.number().min(0), provenance: z.enum(["exact", "estimated"]), source: z.string(), reason: z.string().optional(), projectedTokens: z.number().int().nonnegative().optional(), reservedTokens: z.number().int().nonnegative().optional(), effectiveHandoffThreshold: z.number().min(0).max(1).optional() }).optional(),
   handoffs: z.array(z.object({ sequence: z.number().int().positive(), role: z.string(), previousSessionId: z.string(), newSessionId: z.string(), path: z.string(), reason: z.string(), createdAt: z.string().datetime() })).default([]),
   mutatingActionsBlocked: z.boolean().default(false),
   manualHandoffRequested: z.boolean().default(false),
-  activeSession: z.object({ role: z.string(), sessionId: z.string() }).optional()
+  activeSession: z.object({ role: z.string(), sessionId: z.string() }).optional(),
+  activeModel: z.object({ role: z.string(), alias: z.string(), lifecycle: z.enum(["stopped", "loading", "healthy", "generating", "unloading", "error"]), requestDurationMs: z.number().nonnegative().optional(), tokensPerSecond: z.number().nonnegative().optional() }).optional()
 });
 
 export type RunState = z.infer<typeof runStateSchema>;

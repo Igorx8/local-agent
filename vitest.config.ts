@@ -1,3 +1,3 @@
 import { defineConfig } from "vitest/config";
 
-export default defineConfig({ test: { include: ["tests/**/*.test.ts"], coverage: { reporter: ["text", "json"] } } });
+export default defineConfig({ test: { include: ["tests/**/*.test.{ts,tsx}"], coverage: { reporter: ["text", "json"] } } });

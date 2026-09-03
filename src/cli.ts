@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
@@ -9,6 +9,14 @@ import { readRun, requestManualHandoff, startRun } from "./workflow/run.js";
 import { loadModelRegistry, requireAlias } from "./models/registry.js";
 import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
 import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
+import { buildDashboardSnapshot } from "./telemetry/snapshot.js";
+import { eventFile, readEvents } from "./telemetry/events.js";
+import { watch } from "node:fs";
+
+async function resolveRunId(repository: string, requested?: string): Promise<string> {
+  if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const latest = runs.at(-1); if (!latest) throw new Error(`no runs found in ${directory}`); return latest;
+}
 
 const program = new Command().name("harness").description("Local multi-agent engineering harness").version("0.1.0");
 
@@ -42,9 +50,18 @@ program.command("run").description("Execute the deterministic local engineering 
   process.exitCode = state.status === "succeeded" ? 0 : state.status === "escalated" ? 6 : 5;
 });
 
-program.command("status").description("Read persisted run status").argument("<run-id>").option("--repo <path>", "target repository", ".").option("--json", "emit JSON").action(async (runId, options) => {
-  const state = await readRun(options.repo, runId);
-  if (options.json) process.stdout.write(`${JSON.stringify(state, null, 2)}\n`); else process.stdout.write(`${state.runId} ${state.status} ${state.stage} repairs=${state.counters.repairIterations}\n`);
+program.command("status").description("Show the persisted observational dashboard").argument("[run-id]").option("--repo <path>", "target repository", ".").option("--json", "emit JSON").option("--no-tui", "emit one structured JSON line").action(async (requestedRunId, options) => {
+  const runId = await resolveRunId(options.repo, requestedRunId); const state = await readRun(options.repo, runId); const snapshot = await buildDashboardSnapshot(state, path.resolve(options.repo));
+  if (options.json) { process.stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`); return; }
+  if (!options.tui || !process.stdout.isTTY) { process.stdout.write(`${JSON.stringify({ type: "status.snapshot", ...snapshot })}\n`); return; }
+  try { const { renderDashboard } = await import("./ui/dashboard.js"); await renderDashboard(snapshot); } catch (error) { process.stderr.write(`dashboard unavailable: ${error instanceof Error ? error.message : String(error)}\n`); process.stdout.write(`${JSON.stringify({ type: "status.snapshot", ...snapshot })}\n`); }
+});
+
+program.command("logs").description("Read the bounded run event stream").argument("<run-id>").option("--repo <path>", "target repository", ".").option("--follow", "continue streaming new events").action(async (runId, options) => {
+  const state = await readRun(options.repo, runId); let emitted = 0;
+  const flush = async () => { const events = await readEvents(state.artifactPath, Number.MAX_SAFE_INTEGER); for (const event of events.slice(emitted)) process.stdout.write(`${JSON.stringify(event)}\n`); emitted = events.length; };
+  await flush(); if (!options.follow) return;
+  await new Promise<void>((resolve, reject) => { const observer = watch(state.artifactPath, (_event, filename) => { if (!filename || path.resolve(state.artifactPath, filename) === eventFile(state.artifactPath)) void flush().catch(reject); }); const stop = () => { observer.close(); resolve(); }; process.once("SIGINT", stop); process.once("SIGTERM", stop); observer.once("error", reject); });
 });
 
 program.command("resume").description("Inspect a persisted run before recovery support is enabled").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {

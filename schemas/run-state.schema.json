@@ -26,7 +26,44 @@
     "modelManifest": { "type": "string" },
     "acceptanceCriteriaArtifact": { "type": "string" },
     "oracleTestsArtifact": { "type": "string" },
-    "historicalMetricsArtifact": { "type": "string" }
+    "historicalMetricsArtifact": { "type": "string" },
+    "context": {
+      "type": "object",
+      "required": ["latestPromptTokens", "contextWindow", "usage", "provenance", "source"],
+      "properties": {
+        "latestPromptTokens": { "type": "integer", "minimum": 0 },
+        "contextWindow": { "type": "integer", "minimum": 1 },
+        "usage": { "type": "number", "minimum": 0 },
+        "provenance": { "enum": ["exact", "estimated"] },
+        "source": { "type": "string" },
+        "reason": { "type": "string" },
+        "projectedTokens": { "type": "integer", "minimum": 0 },
+        "reservedTokens": { "type": "integer", "minimum": 0 },
+        "effectiveHandoffThreshold": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "handoffs": { "type": "array", "items": { "type": "object" } },
+    "mutatingActionsBlocked": { "type": "boolean" },
+    "manualHandoffRequested": { "type": "boolean" },
+    "activeSession": {
+      "type": "object",
+      "required": ["role", "sessionId"],
+      "properties": { "role": { "type": "string" }, "sessionId": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "activeModel": {
+      "type": "object",
+      "required": ["role", "alias", "lifecycle"],
+      "properties": {
+        "role": { "type": "string" },
+        "alias": { "type": "string" },
+        "lifecycle": { "enum": ["stopped", "loading", "healthy", "generating", "unloading", "error"] },
+        "requestDurationMs": { "type": "number", "minimum": 0 },
+        "tokensPerSecond": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }
