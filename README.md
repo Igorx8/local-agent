@@ -39,6 +39,8 @@ While a run is active, `harness handoff <run-id> --repo /absolute/project` reque
 
 `model prepare` resolves the three exact Hugging Face cache artifacts, fingerprints them, and generates ignored `config/models.local.yaml`, `config/models.local.ini`, and `config/opencode.local.json` files. It never downloads or substitutes a model. Export `LLAMA_API_KEY` outside the repository, then use `harness model list|status|start|switch|smoke|stop` for manual IDE diagnostics. Stable aliases—not role names—are sent to llama.cpp.
 
+Only one large model may reside in VRAM. A role change finishes its response and any validated handoff, confirms the previous alias is unloaded, waits for NVIDIA VRAM usage to fall to `runtime.modelUnloadVramThresholdMiB`, and only then loads the next alias. `modelShutdownTimeoutMs` fails closed: the next model is not started if resources remain occupied. The last model is unloaded when the workflow exits.
+
 The exit code is `0` only when required prerequisites pass. Missing OpenCode/llama.cpp runtimes are displayed as `BLOCKED` and exit with code `4`; invalid configuration exits with code `2`. This makes `doctor` suitable for CI/setup checks without hiding an incomplete machine setup.
 
 See [compatibility report](docs/compatibility-report.md) and [implementation plan](docs/implementation-plan.md).
@@ -52,5 +54,7 @@ Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage
 Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
 
 Persistent multi-prompt sessions, bounded memory, IDE commands, and fail-closed continuation are documented in [Milestone 9 conversations](docs/milestone-9-conversations.md).
+
+Strict sequential model unload/load behavior and handoff ordering are documented in [Milestone 10 single-model residency](docs/milestone-10-single-model.md).
 
 The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.

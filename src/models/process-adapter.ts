@@ -7,7 +7,7 @@ export interface ManagedProcess { pid?: number; stop(signal: NodeJS.Signals): vo
 export type ProcessLauncher = (command: ModelProcessCommand) => ManagedProcess;
 export interface ProcessManagerOptions {
   baseUrl: string; models: Record<string, ModelProcessCommand>; apiKey?: string; startupTimeoutMs?: number; shutdownTimeoutMs?: number;
-  fetcher?: FetchLike; launcher?: ProcessLauncher; releaseProbe?: () => Promise<boolean>; onProcessOutput?: (stream: "stdout" | "stderr", text: string) => void;
+  fetcher?: FetchLike; launcher?: ProcessLauncher; releaseProbe?: (pid?: number) => Promise<boolean>; onProcessOutput?: (stream: "stdout" | "stderr", text: string) => void;
 }
 
 function launch(command: ModelProcessCommand, onOutput?: ProcessManagerOptions["onProcessOutput"]): ManagedProcess {
@@ -44,7 +44,7 @@ export class ProcessModelManager implements ModelLifecycle {
     await pollUntil(async () => {
       try { await checkedJson(this.fetcher, this.url("/health"), { headers: this.headers() }); return false; } catch { return true; }
     }, timeout);
-    if (this.options.releaseProbe) await pollUntil(this.options.releaseProbe, timeout);
+    if (this.options.releaseProbe) await pollUntil(() => this.options.releaseProbe!(process.pid), timeout);
   }
   private async stopProcess(): Promise<void> {
     if (!this.process) return;

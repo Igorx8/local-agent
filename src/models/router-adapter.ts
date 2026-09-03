@@ -3,7 +3,7 @@ import { checkedJson, pollUntil, type FetchLike } from "./http.js";
 
 interface RouterModel { id: string; path?: string; model?: string; status?: { value?: string; failed?: boolean; args?: string[] }; }
 interface ModelsResponse { data: RouterModel[]; }
-export interface RouterOptions { baseUrl: string; apiKey?: string; startupTimeoutMs?: number; fetcher?: FetchLike; expectedPaths?: Record<string, string[]>; }
+export interface RouterOptions { baseUrl: string; apiKey?: string; startupTimeoutMs?: number; shutdownTimeoutMs?: number; fetcher?: FetchLike; expectedPaths?: Record<string, string[]>; releaseProbe?: () => Promise<boolean>; }
 
 export class RouterModelManager implements ModelLifecycle {
   private current: ModelStatus = { state: "stopped" };
@@ -22,7 +22,13 @@ export class RouterModelManager implements ModelLifecycle {
     this.current = { alias, state: "loading" };
     try {
       const models = await this.models();
-      for (const model of models.filter((item) => item.id !== alias && item.status?.value === "loaded")) await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: model.id }) });
+      const previous = models.filter((item) => item.id !== alias && item.status?.value === "loaded");
+      for (const model of previous) await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: model.id }) });
+      if (previous.length) {
+        const timeout = this.options.shutdownTimeoutMs ?? 30_000;
+        await pollUntil(async () => (await this.models()).every((model) => model.id === alias || model.status?.value !== "loaded"), timeout);
+        if (this.options.releaseProbe) await pollUntil(this.options.releaseProbe, timeout);
+      }
       await checkedJson(this.fetcher, this.url("/models/load"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: alias }) });
       await pollUntil(async () => (await this.models()).some((model) => model.id === alias && model.status?.value === "loaded" && !model.status.failed), this.options.startupTimeoutMs ?? 120_000);
       const loaded = (await this.models()).filter((model) => model.status?.value === "loaded");
@@ -38,7 +44,8 @@ export class RouterModelManager implements ModelLifecycle {
   }
   async stop(): Promise<ModelStatus> {
     if (this.activeRequests) throw new ActiveModelRequestError("cannot unload while a response is active");
-    if (this.current.alias) { this.current = { ...this.current, state: "unloading" }; await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: this.current.alias }) }); }
+    const loaded = (await this.models()).filter((model) => model.status?.value === "loaded");
+    if (loaded.length) { this.current = { ...this.current, state: "unloading" }; for (const model of loaded) await checkedJson(this.fetcher, this.url("/models/unload"), { method: "POST", headers: this.headers(), body: JSON.stringify({ model: model.id }) }); const timeout = this.options.shutdownTimeoutMs ?? 30_000; await pollUntil(async () => (await this.models()).every((model) => model.status?.value !== "loaded"), timeout); if (this.options.releaseProbe) await pollUntil(this.options.releaseProbe, timeout); }
     return this.current = { state: "stopped" };
   }
 }

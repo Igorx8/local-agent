@@ -591,6 +591,8 @@ Before a stage begins, request the required model and verify:
 - expected process exists;
 - GPU memory stabilizes below configured safety limit.
 
+When changing aliases, the sequence is strict: finish the active response, persist and validate any required handoff/session bootstrap, request unload, poll until the previous alias is reported unloaded, wait until VRAM is at or below `modelUnloadVramThresholdMiB`, and only then issue the next load request. Unload confirmation and VRAM release share `modelShutdownTimeoutMs`. A timeout must fail closed without issuing the next load request.
+
 ### Strategy B: explicit process management
 
 Fallback if router unload behavior is unreliable. The manager must:
@@ -607,6 +609,8 @@ Fallback if router unload behavior is unreliable. The manager must:
 The selected launch profile must come from the registry in Section 4.1 and produce the effective arguments in Section 4.3. Neither the workflow nor an LLM may invent a model command.
 
 Never stop a model while an OpenCode response is still streaming.
+
+The final model must also be unloaded when a run succeeds, fails, pauses, escalates, or throws. Failure to confirm final resource release changes the run to failed, blocks mutation, and is recorded in the event log. The handoff artifact remains durable and independent of the model process: model switching may occur only after the handoff response, deterministic validation, and bootstrap verification have completed.
 
 ## 11. Git safety and isolation
 
@@ -1208,6 +1212,9 @@ runtime:
   opencodeUrl: http://127.0.0.1:4096
   llamaUrl: http://127.0.0.1:8080
   modelStrategy: router
+  modelStartupTimeoutMs: 600000
+  modelShutdownTimeoutMs: 30000
+  modelUnloadVramThresholdMiB: 2048
   localOnly: true
 
 modelRegistry: ./config/models.local.yaml
@@ -1448,6 +1455,12 @@ Suggested exit codes:
 - AC-057: A failed, paused, escalated, dirty, or Git-mismatched previous turn fails closed and requires recovery before another mutating prompt.
 - AC-058: `harness chat` works interactively in a TTY, while `harness continue` accepts one prompt non-interactively for IDE tasks and scripts.
 
+### Strict single-model residency
+
+- AC-059: A different model is never loaded until the previous alias is reported unloaded and VRAM is below the configured threshold.
+- AC-060: Resource-release timeout fails closed without sending a load request for the next model, and the final model is unloaded on every workflow exit path.
+- AC-061: A context handoff is persisted, validated, and bootstrapped before the lifecycle manager may unload the model that produced it.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1560,6 +1573,14 @@ Suggested exit codes:
 - bounded semantic memory with deterministic compaction and artifact references;
 - fail-closed recovery and Git identity checks between turns;
 - TTY and non-TTY behavioral tests for AC-051–AC-058.
+
+### Milestone 10: strict single-model residency
+
+- ordered response/handoff completion before model unload;
+- explicit router unload polling before the next load;
+- fail-closed VRAM threshold and shutdown timeout;
+- final model cleanup on every workflow exit path;
+- delayed-release and no-next-load tests for AC-059–AC-061.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
 

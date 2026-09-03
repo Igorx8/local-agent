@@ -112,11 +112,11 @@ model.command("status").description("Show managed process and advertised aliases
   const repository = await workspace(); const registry = await loadModelRegistry(await registryFile(options.registry)); process.stdout.write(`${JSON.stringify({ process: await readModelRuntime(repository), aliases: await runtimeAliases(registry).catch(() => []) }, null, 2)}\n`);
 });
 for (const operation of ["start", "switch"] as const) model.command(operation).argument("<alias>").option("-r, --registry <file>", "registry").action(async (alias, options) => {
-  const repository = await workspace(); const registry = await loadModelRegistry(await registryFile(options.registry)); requireAlias(registry, alias); process.stdout.write(`${JSON.stringify(await startLocalModel(repository, registry, alias), null, 2)}\n`);
+  const repository = await workspace(); const config = await loadConfig(await configuration(repository)); const registry = await loadModelRegistry(await registryFile(options.registry)); requireAlias(registry, alias); process.stdout.write(`${JSON.stringify(await startLocalModel(repository, registry, alias, undefined, config.runtime), null, 2)}\n`);
 });
 model.command("smoke").argument("<alias>").option("-r, --registry <file>", "registry").action(async (alias, options) => {
   const registry = await loadModelRegistry(await registryFile(options.registry)); const result = await smokeModel(registry, alias); process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); if (!result.completion || !result.toolCall) process.exitCode = 5;
 });
-model.command("stop").action(async () => { await stopLocalModel(await workspace()); process.stdout.write("Model stopped.\n"); });
+model.command("stop").action(async () => { const repository = await workspace(); const config = await loadConfig(await configuration(repository)); await stopLocalModel(repository, config.runtime); process.stdout.write("Model stopped.\n"); });
 
 program.parseAsync().catch((error) => { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 2; });

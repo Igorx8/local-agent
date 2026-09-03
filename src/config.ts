@@ -16,6 +16,9 @@ export const harnessConfigSchema = z.object({
     opencodeUrl: z.string().url().default("http://127.0.0.1:4096"),
     llamaUrl: z.string().url().default("http://127.0.0.1:8080"),
     modelStrategy: z.enum(["router", "process"]).default("router"),
+    modelStartupTimeoutMs: z.number().int().positive().default(600_000),
+    modelShutdownTimeoutMs: z.number().int().positive().default(30_000),
+    modelUnloadVramThresholdMiB: z.number().int().nonnegative().default(2048),
     localOnly: z.literal(true).default(true)
   }).refine((v) => [v.opencodeUrl, v.llamaUrl].every((url) => ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)), "localOnly requires loopback runtime URLs"),
   modelRegistry: z.string().min(1).default("./config/models.local.yaml"),

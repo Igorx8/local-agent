@@ -5,6 +5,7 @@ import type { ModelRegistry } from "./registry.js";
 import { requireAlias } from "./registry.js";
 import { explicitProcessProfile, type ServerEntryPoint } from "./profiles.js";
 import { pollUntil } from "./http.js";
+import { vramReleaseProbe } from "./resources.js";
 
 interface RuntimeState { alias: string; pid: number; startedAt: string; }
 const statePath = (root: string) => path.join(root, ".agent-harness", "model-runtime.json");
@@ -15,21 +16,23 @@ export async function runtimeAliases(registry: ModelRegistry): Promise<string[]>
   if (!response.ok) throw new Error(`GET /v1/models returned ${response.status}`);
   const body = await response.json() as { data?: Array<{ id?: string }> }; return (body.data ?? []).flatMap((model) => model.id ? [model.id] : []);
 }
-export async function stopLocalModel(root: string): Promise<void> {
+export async function stopLocalModel(root: string, options: { shutdownTimeoutMs?: number; modelUnloadVramThresholdMiB?: number; releaseProbe?: () => Promise<boolean> } = {}): Promise<void> {
   const state = await readModelRuntime(root); if (!state) return;
   try { process.kill(-state.pid, "SIGTERM"); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
-  await pollUntil(async () => { try { process.kill(state.pid, 0); return false; } catch { return true; } }, 30_000).catch(() => { try { process.kill(-state.pid, "SIGKILL"); } catch { /* already stopped */ } });
+  const timeout = options.shutdownTimeoutMs ?? 30_000; const exited = async () => { try { process.kill(state.pid, 0); return false; } catch { return true; } };
+  try { await pollUntil(exited, timeout); } catch { try { process.kill(-state.pid, "SIGKILL"); } catch { /* already stopped */ } await pollUntil(exited, timeout); }
+  await pollUntil(options.releaseProbe ?? vramReleaseProbe(options.modelUnloadVramThresholdMiB ?? 2048), timeout);
   await unlink(statePath(root)).catch(() => undefined);
 }
-export async function startLocalModel(root: string, registry: ModelRegistry, alias: string, entryPoint: ServerEntryPoint = { command: "llama", prefix: ["serve"] }): Promise<RuntimeState> {
+export async function startLocalModel(root: string, registry: ModelRegistry, alias: string, entryPoint: ServerEntryPoint = { command: "llama", prefix: ["serve"] }, lifecycle: { shutdownTimeoutMs?: number; modelUnloadVramThresholdMiB?: number } = {}): Promise<RuntimeState> {
   requireAlias(registry, alias); const key = process.env[registry.apiKeyEnv]; if (!key) throw new Error(`${registry.apiKeyEnv} is not set`);
   const existing = await readModelRuntime(root); if (existing?.alias === alias && (await runtimeAliases(registry).catch((): string[] => [])).includes(alias)) return existing;
-  if (existing) await stopLocalModel(root);
+  if (existing) await stopLocalModel(root, lifecycle);
   const directory = path.join(root, ".agent-harness"); await mkdir(directory, { recursive: true }); const log = await open(path.join(directory, "model-server.log"), "a", 0o600);
   const profile = explicitProcessProfile(registry, alias, entryPoint, key); const child = spawn(profile.command, profile.args, { cwd: root, env: process.env, detached: true, shell: false, stdio: ["ignore", log.fd, log.fd] });
   if (!child.pid) throw new Error("llama.cpp process did not return a pid"); child.unref(); await log.close();
   const state = { alias, pid: child.pid, startedAt: new Date().toISOString() }; await writeFile(statePath(root), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-  try { await pollUntil(async () => (await runtimeAliases(registry).catch((): string[] => [])).includes(alias), 600_000, 500); } catch (error) { await stopLocalModel(root); throw error; }
+  try { await pollUntil(async () => (await runtimeAliases(registry).catch((): string[] => [])).includes(alias), 600_000, 500); } catch (error) { await stopLocalModel(root, lifecycle); throw error; }
   return state;
 }
 export async function smokeModel(registry: ModelRegistry, alias: string): Promise<{ completion: boolean; toolCall: boolean }> {
