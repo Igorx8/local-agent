@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
@@ -64,7 +64,8 @@ export const harnessConfigSchema = z.object({
 export type HarnessConfig = z.infer<typeof harnessConfigSchema>;
 
 export async function loadConfig(file: string): Promise<HarnessConfig> {
-  const raw = YAML.parse(await readFile(path.resolve(file), "utf8"));
+  const configFile = path.resolve(file); const raw = YAML.parse(await readFile(configFile, "utf8"));
+  for (const key of ["modelRegistry", "routerPreset"] as const) if (typeof raw[key] === "string" && !path.isAbsolute(raw[key])) { const candidates = [path.resolve(raw[key]), path.resolve(path.dirname(configFile), raw[key]), path.resolve(path.dirname(configFile), "..", raw[key])]; for (const candidate of candidates) try { await access(candidate); raw[key] = candidate; break; } catch { /* resolved path is validated by its consumer */ } }
   const config = harnessConfigSchema.parse(raw);
   const registry = await loadModelRegistry(config.modelRegistry);
   for (const role of agentRoles) {

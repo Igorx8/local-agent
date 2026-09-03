@@ -4,7 +4,7 @@ Foundation for a local-only engineering orchestrator using OpenCode and llama.cp
 
 ## Where it runs
 
-The harness source lives in this repository, but it is designed to target any explicitly supplied Git repository. From Milestone 2 onward, each run will create an isolated `agent/<run-id>-<slug>` branch/worktree and store auditable artifacts under `.agent-harness/runs/<run-id>/` in the target project. It will never merge into the default branch.
+The harness source lives in this repository, but the installed command targets the Git workspace containing the current directory. It works from the repository root or any nested package in a monorepo. Each run creates an isolated `agent/<run-id>-<slug>` branch/worktree and stores auditable artifacts under `.agent-harness/runs/<run-id>/` in the target project. It never merges into the default branch.
 
 For IDE use, open the project you want to change and run the installed `harness` CLI in the integrated terminal (or a future IDE task). OpenCode provides agent sessions and tools; this harness owns deterministic stage transitions, permissions, gates, evidence, and recovery.
 
@@ -19,14 +19,15 @@ npm test
 npm run dev -- doctor --config config/harness.yaml
 ```
 
-With OpenCode and the llama.cpp router already running and the production model aliases configured:
+With OpenCode and the llama.cpp router running, open any personal project in the IDE and use its integrated terminal:
 
 ```bash
-npm run dev -- run --repo /absolute/project --requirements /absolute/requirements.md --config config/harness.yaml
-npm run dev -- status <run-id> --repo /absolute/project --json
-npm run dev -- status --repo /absolute/project --no-tui
-npm run dev -- logs <run-id> --repo /absolute/project --follow
+harness "adicione validação, testes e atualize a documentação"
+harness status
+harness logs <run-id> --follow
 ```
+
+`run` is the default command, `--repo` defaults to the containing Git root, and an inline task replaces the requirement-file ceremony. Existing explicit usage remains supported with `harness run --repo /path --requirements requirements.md --config harness.yaml`. Configuration discovery checks `--config`, `HARNESS_CONFIG`, `.agent-harness/harness.yaml`, `config/harness.yaml`, and finally the packaged local configuration, in that order.
 
 `resume` reconciles persisted state with Git and classifies a clean pre-edit restart, a matching checkpoint, or manual reconciliation. Dirty editing work is never reset or discarded. `abort` writes a cooperative pause request consumed between workflow stages, and `report` creates a SHA-256 artifact index plus human-readable recovery summary.
 

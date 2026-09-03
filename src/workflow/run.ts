@@ -25,13 +25,14 @@ import { createReproducibilityManifest } from "../reproducibility/manifest.js";
 import { generateRunReport } from "../report/run-report.js";
 import { persistRecoveryPlan, reconcileRun } from "../recovery/reconcile.js";
 
-export interface StartRunOptions { repository: string; requirementsFile: string; config: HarnessConfig; definitionOfDone?: string; onCreated?(runId: string): Promise<void> | void; }
+export interface StartRunOptions { repository: string; requirementsFile?: string; requirements?: string; config: HarnessConfig; definitionOfDone?: string; onCreated?(runId: string): Promise<void> | void; }
 function runIdentifier(): string { return `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`; }
 function slug(value: string): string { return path.basename(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "task"; }
 
 export async function startRun(options: StartRunOptions): Promise<RunState> {
+  if (Boolean(options.requirementsFile) === Boolean(options.requirements?.trim())) throw new Error("provide exactly one requirements file or inline task");
   const repository = path.resolve(options.repository); await inspectRepository(repository); const registry = await loadModelRegistry(options.config.modelRegistry); assertImmutableArtifacts(registry); const runId = runIdentifier();
-  const harnessRoot = path.join(repository, ".agent-harness"); const worktree = path.join(harnessRoot, "worktrees", runId); const branch = `${options.config.git.branchPrefix}${runId}-${slug(options.requirementsFile)}`;
+  const requirementSource = options.requirementsFile ? path.resolve(options.requirementsFile) : "inline-task"; const harnessRoot = path.join(repository, ".agent-harness"); const worktree = path.join(harnessRoot, "worktrees", runId); const branch = `${options.config.git.branchPrefix}${runId}-${slug(options.requirementsFile ?? options.requirements ?? "task")}`;
   await preflight({ repository, workspaceRoot: harnessRoot, worktreePath: worktree, targetBranch: branch, allowDirtyWorktree: !options.config.git.requireCleanWorktree, protectedBranches: ["main", "master"] });
   await mkdir(harnessRoot, { recursive: true }); await createWorktree(repository, harnessRoot, worktree, branch);
   const artifacts = path.join(harnessRoot, "runs", runId); const store = new StateStore(artifacts); const now = new Date().toISOString();
@@ -39,7 +40,7 @@ export async function startRun(options: StartRunOptions): Promise<RunState> {
   await store.initialize(initial); await options.onCreated?.(runId); const release = await store.acquireLock();
   try {
     await writeArtifact(artifacts, "config.snapshot.json", options.config); await writeArtifact(artifacts, "model-registry.snapshot.json", registry);
-    const requirements = await readFile(path.resolve(options.requirementsFile), "utf8"); const definitionOfDone = options.definitionOfDone ?? "All required gates pass and every acceptance criterion is proven."; await writeArtifact(artifacts, "requirements.json", redact({ source: path.resolve(options.requirementsFile), content: requirements, definitionOfDone }, [process.env[options.config.apiKeyEnv] ?? ""], options.config.security.redactPatterns));
+    const requirements = options.requirementsFile ? await readFile(requirementSource, "utf8") : options.requirements!.trim(); const definitionOfDone = options.definitionOfDone ?? "All required gates pass and every acceptance criterion is proven."; await writeArtifact(artifacts, "requirements.json", redact({ source: requirementSource, content: requirements, definitionOfDone }, [process.env[options.config.apiKeyEnv] ?? ""], options.config.security.redactPatterns));
     const client = connectOpencode({ baseUrl: options.config.runtime.opencodeUrl, directory: worktree }); const sessions = new OpencodeSessions(client, worktree);
     const manifest = await createReproducibilityManifest(artifacts, options.config, registry); initial.modelManifest = manifest; await store.write(initial); const manager = createModelManager(options.config, { registry, router: {}, process: {} });
     const contextWindows = Object.fromEntries(Object.entries(registry.models).map(([alias, model]) => [alias, model.contextSize]));
