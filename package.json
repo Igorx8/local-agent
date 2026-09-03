@@ -11,6 +11,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e:projects": "npm run build && node scripts/e2e-projects.mjs",
     "dev": "tsx src/cli.ts"
   },
   "engines": {

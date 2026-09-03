@@ -2,7 +2,7 @@ import type { AssistantMessage, Event, FileDiff, OpencodeClient, Part, Session, 
 import { responseData } from "./client.js";
 
 export interface ModelSelection { providerID: string; modelID: string; }
-export interface PromptRequest { sessionID: string; text: string; agent: string; model: ModelSelection; system?: string; tools?: Record<string, boolean>; asynchronous?: boolean; }
+export interface PromptRequest { sessionID: string; text: string; agent: string; model: ModelSelection; system?: string; tools?: Record<string, boolean>; asynchronous?: boolean; signal?: AbortSignal; }
 export interface TokenUsage { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number; provenance: "opencode_message_metadata"; }
 
 export function parseModelAlias(value: string): ModelSelection {
@@ -19,7 +19,7 @@ export class OpencodeSessions {
   }
 
   async prompt(request: PromptRequest): Promise<unknown> {
-    const options = { path: { id: request.sessionID }, query: { directory: this.directory }, body: { agent: request.agent, model: request.model, system: request.system, tools: request.tools, parts: [{ type: "text" as const, text: request.text }] } };
+    const options = { path: { id: request.sessionID }, query: { directory: this.directory }, body: { agent: request.agent, model: request.model, system: request.system, tools: request.tools, parts: [{ type: "text" as const, text: request.text }] }, signal: request.signal };
     if (request.asynchronous) return responseData(await this.client.session.promptAsync(options));
     return responseData(await this.client.session.prompt(options));
   }

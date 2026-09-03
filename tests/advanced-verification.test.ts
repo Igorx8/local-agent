@@ -39,7 +39,7 @@ describe("advanced verification", () => {
   });
 
   it("appends historical metrics as JSONL", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "history-")); const file = path.join(directory, "history.jsonl"); const metric = { schemaVersion: 1 as const, recordedAt: new Date().toISOString(), runId: "run", repository: directory, success: true, firstPassGateSuccess: true, repairIterations: 0, confirmedFindings: 0, invalidFindings: 0, regressions: 0, testProvenance: { property_based: 1 }, mutationScore: 1, flakyIncidents: 0, durationMs: 10 };
+    const directory = await mkdtemp(path.join(tmpdir(), "history-")); const file = path.join(directory, "history.jsonl"); const metric = { schemaVersion: 1 as const, recordedAt: new Date().toISOString(), runId: "run", repository: directory, success: true, firstPassGateSuccess: true, repairIterations: 0, confirmedFindings: 0, invalidFindings: 0, regressions: 0, testProvenance: { property_based: 1 }, mutationScore: 1, flakyIncidents: 0, durationMs: 10, gateResults: { test: "passed" }, diffChurn: 1, handoffs: 0, humanInterventions: 0 };
     await appendHistoricalMetric(file, metric); await appendHistoricalMetric(file, metric); expect((await readFile(file, "utf8")).trim().split("\n")).toHaveLength(2);
   });
 });

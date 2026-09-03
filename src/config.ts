@@ -28,6 +28,7 @@ export const harnessConfigSchema = z.object({
     maxReviewIterations: z.number().int().min(1).default(3),
     adaptiveReviewMaximum: z.number().int().min(1).default(5),
     inferenceRetries: z.number().int().min(0).default(2),
+    inferenceTimeoutMs: z.number().int().positive().default(900_000),
     requireObjectiveProgress: z.boolean().default(true),
     stopAfterConsecutiveStagnantIterations: z.number().int().min(1).default(2),
     autoCommitCheckpoints: z.boolean().default(true),
@@ -55,7 +56,7 @@ export const harnessConfigSchema = z.object({
     maxChangedFilesBeforeReview: z.number().int().positive().default(20), maxAddedLinesBeforeReview: z.number().int().positive().default(800),
     requireDependencyChangeJustification: z.boolean().default(true), requirePublicApiChangeJustification: z.boolean().default(true), requireMigrationJustification: z.boolean().default(true)
   }).default({ allowedPaths: [], deniedPaths: [], maxChangedFilesBeforeReview: 20, maxAddedLinesBeforeReview: 800, requireDependencyChangeJustification: true, requirePublicApiChangeJustification: true, requireMigrationJustification: true }),
-  security: z.object({ deniedPathPatterns: z.array(z.string()).default(["**/.env", "**/.ssh/**"]), redactPatterns: z.array(z.string()).default([]) }).default({ deniedPathPatterns: ["**/.env", "**/.ssh/**"], redactPatterns: [] }),
+  security: z.object({ deniedPathPatterns: z.array(z.string()).default(["**/.env", "**/.ssh/**"]), redactPatterns: z.array(z.string()).default([]).superRefine((patterns, context) => { for (const pattern of patterns) try { new RegExp(pattern); } catch { context.addIssue({ code: "custom", message: `invalid redaction regex: ${pattern}` }); } }) }).default({ deniedPathPatterns: ["**/.env", "**/.ssh/**"], redactPatterns: [] }),
   telemetry: z.object({ jsonLogs: z.boolean().default(true), storePrompts: z.boolean().default(true), storeResponses: z.boolean().default(true) }).default({ jsonLogs: true, storePrompts: true, storeResponses: true }),
   git: z.object({ requireCleanWorktree: z.boolean().default(true), useIsolatedWorktree: z.boolean().default(true), branchPrefix: z.string().default("agent/"), defaultBranchProtection: z.boolean().default(true) }).default({ requireCleanWorktree: true, useIsolatedWorktree: true, branchPrefix: "agent/", defaultBranchProtection: true })
 });

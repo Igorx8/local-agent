@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The current implementation reaches Milestone 7: typed local runtimes, deterministic engineering and verification workflows, context continuity, structured event telemetry, machine metrics, and an observational Ink dashboard with non-TTY fallback.
+Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The implementation now includes the Milestone 8 hardening layer: recovery reconciliation, preserved failure reports, immutable runtime/model manifests, expanded secret redaction, state migration guards, and local Python/TypeScript E2E gates.
 
 ## Where it runs
 
@@ -28,7 +28,7 @@ npm run dev -- status --repo /absolute/project --no-tui
 npm run dev -- logs <run-id> --repo /absolute/project --follow
 ```
 
-`resume` currently refuses interrupted editing stages safely; Git/session reconciliation is deliberately reserved for the recovery hardening milestone.
+`resume` reconciles persisted state with Git and classifies a clean pre-edit restart, a matching checkpoint, or manual reconciliation. Dirty editing work is never reset or discarded. `abort` writes a cooperative pause request consumed between workflow stages, and `report` creates a SHA-256 artifact index plus human-readable recovery summary.
 
 While a run is active, `harness handoff <run-id> --repo /absolute/project` requests a manual handoff at the next safe model-action boundary.
 
@@ -43,5 +43,7 @@ Project-specific advanced verification commands use normalized, fail-closed adap
 Context accounting, deterministic Markdown handoffs, semantic abstraction boundaries, bootstrap verification, and the emergency compaction fallback are documented in [Milestone 6 context continuity](docs/milestone-6-context-continuity.md).
 
 Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage are documented in [Milestone 7 visual feedback](docs/milestone-7-visual-feedback.md).
+
+Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
 
 The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.

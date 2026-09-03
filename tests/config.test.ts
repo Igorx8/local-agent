@@ -8,6 +8,7 @@ describe("harnessConfigSchema", () => {
   it("applies safe defaults", () => {
     const parsed = harnessConfigSchema.parse(valid);
     expect(parsed.workflow.maxReviewIterations).toBe(3);
+    expect(parsed.workflow.inferenceTimeoutMs).toBe(900000);
     expect(parsed.workflow.autoMerge).toBe(false);
     expect(parsed.context.handoffThreshold).toBe(0.85);
     expect(parsed.verification.flakyRepetitions).toBe(3);
@@ -21,5 +22,8 @@ describe("harnessConfigSchema", () => {
   it("rejects automatic merge and unordered context thresholds", () => {
     expect(() => harnessConfigSchema.parse({ ...valid, workflow: { autoMerge: true } })).toThrow();
     expect(() => harnessConfigSchema.parse({ ...valid, context: { warningThreshold: 0.9, prepareHandoffThreshold: 0.78 } })).toThrow(/strictly increasing/);
+  });
+  it("rejects invalid secret-redaction expressions", () => {
+    expect(() => harnessConfigSchema.parse({ ...valid, security: { redactPatterns: ["["] } })).toThrow(/invalid redaction regex/);
   });
 });

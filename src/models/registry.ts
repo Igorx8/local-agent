@@ -48,6 +48,7 @@ export function resolveRoleAlias(registry: ModelRegistry, role: AgentRoleName): 
 export function requireAlias(registry: ModelRegistry, alias: string): RegisteredModel {
   const model = registry.models[alias]; if (!model) throw new Error(`unknown model alias: ${alias}`); return model;
 }
+export function assertImmutableArtifacts(registry: ModelRegistry): void { for (const alias of Object.keys(registry.models)) if (!registry.artifacts?.[alias]) throw new Error(`${alias}: immutable artifact identity is required; run model prepare with fingerprinting`); }
 
 function hfCacheDirectory(cacheRoot: string, hfRef: string): string {
   const repository = hfRef.slice(0, hfRef.lastIndexOf(":"));

@@ -27,7 +27,7 @@ export class OpenCodeRoleRunner implements RoleRunner {
     this.models.beginRequest(alias);
     const startedAt = performance.now();
     try {
-      await this.sessions.prompt({ sessionID: session.id, text: invocation.prompt, agent: agentNames[invocation.role], model: selection });
+      await this.sessions.prompt({ sessionID: session.id, text: invocation.prompt, agent: agentNames[invocation.role], model: selection, signal: AbortSignal.timeout(this.config.workflow.inferenceTimeoutMs) });
     } finally { this.models.endRequest(alias); }
     const messages = await this.sessions.messages(session.id);
     const response = [...messages].reverse().find((message) => message.info.role === "assistant");

@@ -44,8 +44,10 @@
       "additionalProperties": false
     },
     "handoffs": { "type": "array", "items": { "type": "object" } },
+    "checkpoints": { "type": "array", "items": { "type": "object" } },
     "mutatingActionsBlocked": { "type": "boolean" },
     "manualHandoffRequested": { "type": "boolean" },
+    "pausedFromStage": { "type": "string" },
     "activeSession": {
       "type": "object",
       "required": ["role", "sessionId"],

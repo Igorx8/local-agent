@@ -7,7 +7,7 @@ import type { RunState } from "../src/state/types.js";
 
 function state(directory: string): RunState {
   const now = new Date().toISOString();
-  return { schemaVersion: 1, runId: "run-1", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 }, handoffs: [], mutatingActionsBlocked: false, manualHandoffRequested: false };
+  return { schemaVersion: 1, runId: "run-1", repositoryPath: directory, artifactPath: directory, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 }, handoffs: [], checkpoints: [], mutatingActionsBlocked: false, manualHandoffRequested: false };
 }
 
 describe("StateStore", () => {
@@ -27,5 +27,8 @@ describe("StateStore", () => {
     await release();
     const releaseAgain = await store.acquireLock();
     await releaseAgain();
+  });
+  it("fills additive state defaults and rejects unknown schema versions", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "harness-migration-")); const store = new StateStore(directory); const legacy = state(directory) as unknown as Record<string, unknown>; delete legacy.checkpoints; await import("node:fs/promises").then(({ mkdir, writeFile }) => mkdir(directory, { recursive: true }).then(() => writeFile(store.statePath, JSON.stringify(legacy)))); expect((await store.read()).checkpoints).toEqual([]); legacy.schemaVersion = 99; await import("node:fs/promises").then(({ writeFile }) => writeFile(store.statePath, JSON.stringify(legacy))); await expect(store.read()).rejects.toThrow(/unsupported run state schema/);
   });
 });

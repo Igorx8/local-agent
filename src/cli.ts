@@ -5,13 +5,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { runDoctor } from "./doctor.js";
-import { readRun, requestManualHandoff, startRun } from "./workflow/run.js";
+import { readRun, requestManualHandoff, requestPause, resumeRun, startRun } from "./workflow/run.js";
 import { loadModelRegistry, requireAlias } from "./models/registry.js";
 import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
 import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
 import { buildDashboardSnapshot } from "./telemetry/snapshot.js";
 import { eventFile, readEvents } from "./telemetry/events.js";
 import { watch } from "node:fs";
+import { generateRunReport } from "./report/run-report.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -45,7 +46,8 @@ program.command("init").description("Create a safe project-local harness configu
 });
 
 program.command("run").description("Execute the deterministic local engineering workflow").requiredOption("--repo <path>", "target Git repository").requiredOption("--requirements <file>", "requirements Markdown file").option("-c, --config <file>", "configuration file", "config/harness.yaml").option("--definition-of-done <text>", "explicit definition of done").action(async (options) => {
-  const state = await startRun({ repository: options.repo, requirementsFile: options.requirements, config: await loadConfig(options.config), definitionOfDone: options.definitionOfDone });
+  let activeRunId: string | undefined; let interrupts = 0; const signal = () => { if (!activeRunId) return; interrupts++; if (interrupts === 1) { void requestPause(options.repo, activeRunId).then((file) => process.stderr.write(`Graceful pause requested: ${file}\n`)).catch((error) => process.stderr.write(`Pause request failed: ${error instanceof Error ? error.message : String(error)}\n`)); return; } process.stderr.write("Second interrupt received; exiting immediately with persisted state preserved.\n"); process.exit(130); }; process.on("SIGINT", signal);
+  const state = await startRun({ repository: options.repo, requirementsFile: options.requirements, config: await loadConfig(options.config), definitionOfDone: options.definitionOfDone, onCreated(runId) { activeRunId = runId; } }).finally(() => process.off("SIGINT", signal));
   process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
   process.exitCode = state.status === "succeeded" ? 0 : state.status === "escalated" ? 6 : 5;
 });
@@ -64,10 +66,16 @@ program.command("logs").description("Read the bounded run event stream").argumen
   await new Promise<void>((resolve, reject) => { const observer = watch(state.artifactPath, (_event, filename) => { if (!filename || path.resolve(state.artifactPath, filename) === eventFile(state.artifactPath)) void flush().catch(reject); }); const stop = () => { observer.close(); resolve(); }; process.once("SIGINT", stop); process.once("SIGTERM", stop); observer.once("error", reject); });
 });
 
-program.command("resume").description("Inspect a persisted run before recovery support is enabled").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
-  const state = await readRun(options.repo, runId);
-  if (state.status === "succeeded" || state.status === "failed" || state.status === "escalated") { process.stdout.write(`${JSON.stringify(state, null, 2)}\n`); return; }
-  throw new Error(`run ${runId} stopped at ${state.stage}; editing-stage reconciliation is scheduled for Milestone 8 and automatic resume is refused safely`);
+program.command("resume").description("Reconcile an interrupted run without discarding work").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
+  const result = await resumeRun(options.repo, runId); process.stdout.write(`${JSON.stringify({ recovery: result.plan, state: result.state }, null, 2)}\n`); if (result.plan.disposition === "manual_reconciliation") process.exitCode = 7; else if (result.state.status !== "succeeded" && result.state.status !== "active") process.exitCode = result.state.status === "escalated" ? 6 : 5;
+});
+
+program.command("abort").description("Pause a run and preserve all recovery material").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
+  const request = await requestPause(options.repo, runId); process.stdout.write(`Graceful pause requested: ${request}\n`);
+});
+
+program.command("report").description("Generate a reproducible report for a run").argument("<run-id>").option("--repo <path>", "target repository", ".").option("--json", "emit report JSON").action(async (runId, options) => {
+  const report = await generateRunReport(await readRun(options.repo, runId)); if (options.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`); else process.stdout.write(`Report written for ${report.runId}: ${report.status} at ${report.stage}; artifacts=${report.artifacts.length}\n`);
 });
 
 program.command("handoff").description("Request a safe handoff at the next model-action boundary").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
