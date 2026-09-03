@@ -70,6 +70,9 @@ telemetry:
   jsonLogs: true
   storePrompts: true
   storeResponses: true
+conversation:
+  maxRecentTurns: 8
+  maxMemoryBytes: 32768
 git:
   requireCleanWorktree: true
   useIsolatedWorktree: true

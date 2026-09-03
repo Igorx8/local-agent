@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { access, mkdir, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { runDoctor } from "./doctor.js";
-import { readRun, requestManualHandoff, requestPause, resumeRun, startRun } from "./workflow/run.js";
+import { readRun, requestManualHandoff, requestPause, resumeRun } from "./workflow/run.js";
 import { loadModelRegistry, requireAlias } from "./models/registry.js";
 import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
 import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
@@ -14,6 +15,7 @@ import { eventFile, readEvents } from "./telemetry/events.js";
 import { watch } from "node:fs";
 import { generateRunReport } from "./report/run-report.js";
 import { discoverHarnessConfig, resolveWorkspace } from "./workspace.js";
+import { continueConversation, readConversation } from "./conversation/service.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -25,6 +27,10 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 async function workspace(value = "."): Promise<string> { return resolveWorkspace(value); }
 async function configuration(repository: string, requested?: string): Promise<string> { return discoverHarnessConfig(repository, requested, moduleDirectory); }
 async function registryFile(requested?: string): Promise<string> { if (requested) return path.resolve(requested); const repository = await workspace(); return (await loadConfig(await configuration(repository))).modelRegistry; }
+async function conversationalTurn(repository: string, prompt: string, config: Awaited<ReturnType<typeof loadConfig>>, conversationId?: string, newConversation = false, definitionOfDone?: string) {
+  let activeRunId: string | undefined; let interrupts = 0; const signal = () => { if (!activeRunId) return; interrupts++; if (interrupts === 1) { void requestPause(repository, activeRunId).then((file) => process.stderr.write(`Graceful pause requested: ${file}\n`)).catch((error) => process.stderr.write(`Pause request failed: ${error instanceof Error ? error.message : String(error)}\n`)); return; } process.stderr.write("Second interrupt received; exiting immediately with persisted state preserved.\n"); process.exit(130); }; process.on("SIGINT", signal);
+  return continueConversation({ workspace: repository, prompt, config, conversationId, newConversation, definitionOfDone, onRunCreated(runId) { activeRunId = runId; } }).finally(() => process.off("SIGINT", signal));
+}
 
 program.command("doctor").description("Validate local runtime compatibility").option("-c, --config <file>", "configuration file").option("--json", "emit JSON").action(async (options) => {
   const repository = await workspace(); const report = await runDoctor(await loadConfig(await configuration(repository, options.config)));
@@ -49,12 +55,18 @@ program.command("init").description("Create a safe project-local harness configu
   process.stdout.write(`Created ${destination}\n`);
 });
 
-program.command("run", { isDefault: true }).description("Execute in the current Git workspace").argument("[task]", "inline task description").option("--repo <path>", "target Git workspace", ".").option("--requirements <file>", "requirements Markdown file").option("-c, --config <file>", "configuration file").option("--definition-of-done <text>", "explicit definition of done").action(async (task, options) => {
+program.command("run", { isDefault: true }).description("Execute in the current Git workspace").argument("[task]", "inline task description").option("--repo <path>", "target Git workspace", ".").option("--requirements <file>", "requirements Markdown file").option("-c, --config <file>", "configuration file").option("--new", "start a new workspace conversation").option("--definition-of-done <text>", "explicit definition of done").action(async (task, options) => {
   const repository = await workspace(options.repo); if (task && options.requirements) throw new Error("use either an inline task or --requirements, not both"); if (!task && !options.requirements) throw new Error("provide a task, for example: harness \"add validation and tests\""); const configFile = await configuration(repository, options.config);
-  let activeRunId: string | undefined; let interrupts = 0; const signal = () => { if (!activeRunId) return; interrupts++; if (interrupts === 1) { void requestPause(repository, activeRunId).then((file) => process.stderr.write(`Graceful pause requested: ${file}\n`)).catch((error) => process.stderr.write(`Pause request failed: ${error instanceof Error ? error.message : String(error)}\n`)); return; } process.stderr.write("Second interrupt received; exiting immediately with persisted state preserved.\n"); process.exit(130); }; process.on("SIGINT", signal);
-  const state = await startRun({ repository, requirementsFile: options.requirements, requirements: task, config: await loadConfig(configFile), definitionOfDone: options.definitionOfDone, onCreated(runId) { activeRunId = runId; } }).finally(() => process.off("SIGINT", signal));
-  process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
-  process.exitCode = state.status === "succeeded" ? 0 : state.status === "escalated" ? 6 : 5;
+  const prompt = task ?? await readFile(path.resolve(options.requirements), "utf8"); const result = await conversationalTurn(repository, prompt, await loadConfig(configFile), undefined, options.new, options.definitionOfDone); process.stdout.write(`${JSON.stringify({ conversationId: result.conversation.id, turn: result.conversation.turns.length, run: result.run }, null, 2)}\n`); process.exitCode = result.run.status === "succeeded" ? 0 : result.run.status === "escalated" ? 6 : 5;
+});
+
+program.command("continue").description("Execute one prompt in a persistent workspace conversation").argument("[words...]", "optional conversation ID followed by the prompt").option("--conversation <id>", "conversation ID").option("--repo <path>", "target Git workspace", ".").option("-c, --config <file>", "configuration file").option("--new", "start a new conversation").action(async (words: string[], options) => {
+  const repository = await workspace(options.repo); const values = [...words]; let conversationId = options.conversation as string | undefined; if (!conversationId && values[0]?.startsWith("conv-") && values.length > 1) conversationId = values.shift(); const prompt = values.join(" ").trim(); if (!prompt) throw new Error("provide a prompt to continue the conversation"); const result = await conversationalTurn(repository, prompt, await loadConfig(await configuration(repository, options.config)), conversationId, options.new); process.stdout.write(`${JSON.stringify({ conversationId: result.conversation.id, turn: result.conversation.turns.length, run: result.run }, null, 2)}\n`); process.exitCode = result.run.status === "succeeded" ? 0 : result.run.status === "escalated" ? 6 : 5;
+});
+
+program.command("chat").description("Open an interactive persistent workspace conversation").argument("[conversation-id]").option("--repo <path>", "target Git workspace", ".").option("-c, --config <file>", "configuration file").option("--new", "start a new conversation").action(async (conversationId, options) => {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("harness chat requires a TTY; use harness continue for scripts"); const repository = await workspace(options.repo); const config = await loadConfig(await configuration(repository, options.config)); const terminal = createInterface({ input: process.stdin, output: process.stdout }); let selected = conversationId as string | undefined; let createNew = Boolean(options.new); process.stdout.write("Local Agent chat. Commands: /status, /memory, /exit\n");
+  try { while (true) { const prompt = (await terminal.question("you> ")).trim(); if (!prompt) continue; if (prompt === "/exit") break; if (prompt === "/status" || prompt === "/memory") { const current = await readConversation(repository, selected); selected = current.state.id; process.stdout.write(`${JSON.stringify(prompt === "/status" ? current.state : current.memory, null, 2)}\n`); continue; } const result = await conversationalTurn(repository, prompt, config, selected, createNew); selected = result.conversation.id; createNew = false; process.stdout.write(`agent> turn ${result.conversation.turns.length} ${result.run.status}; conversation=${selected}; run=${result.run.runId}; worktree=${result.run.repositoryPath}\n`); } } finally { terminal.close(); }
 });
 
 program.command("status").description("Show the persisted observational dashboard").argument("[run-id]").option("--repo <path>", "target repository", ".").option("--json", "emit JSON").option("--no-tui", "emit one structured JSON line").action(async (requestedRunId, options) => {

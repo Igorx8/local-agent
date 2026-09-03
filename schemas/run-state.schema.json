@@ -48,6 +48,7 @@
     "mutatingActionsBlocked": { "type": "boolean" },
     "manualHandoffRequested": { "type": "boolean" },
     "pausedFromStage": { "type": "string" },
+    "conversation": { "type": "object" },
     "activeSession": {
       "type": "object",
       "required": ["role", "sessionId"],

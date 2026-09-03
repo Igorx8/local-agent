@@ -23,6 +23,7 @@ export const runStateSchema = z.object({
   mutatingActionsBlocked: z.boolean().default(false),
   manualHandoffRequested: z.boolean().default(false),
   pausedFromStage: z.enum(workflowStates).optional(),
+  conversation: z.object({ id: z.string().min(1), turn: z.number().int().positive(), baseCommit: z.string().min(1) }).optional(),
   activeSession: z.object({ role: z.string(), sessionId: z.string() }).optional(),
   activeModel: z.object({ role: z.string(), alias: z.string(), lifecycle: z.enum(["stopped", "loading", "healthy", "generating", "unloading", "error"]), requestDurationMs: z.number().nonnegative().optional(), tokensPerSecond: z.number().nonnegative().optional() }).optional()
 });

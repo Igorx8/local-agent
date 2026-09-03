@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. The implementation now includes the Milestone 8 hardening layer: recovery reconciliation, preserved failure reports, immutable runtime/model manifests, expanded secret redaction, state migration guards, and local Python/TypeScript E2E gates.
+Foundation for a local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–9 are implemented, including persistent workspace conversations on top of the audited, isolated workflow runs.
 
 ## Where it runs
 
@@ -22,12 +22,16 @@ npm run dev -- doctor --config config/harness.yaml
 With OpenCode and the llama.cpp router running, open any personal project in the IDE and use its integrated terminal:
 
 ```bash
-harness "adicione validação, testes e atualize a documentação"
+harness --new "adicione validação, testes e atualize a documentação"
+harness continue "agora cubra também os casos de erro"
+harness chat
 harness status
 harness logs <run-id> --follow
 ```
 
-`run` is the default command, `--repo` defaults to the containing Git root, and an inline task replaces the requirement-file ceremony. Existing explicit usage remains supported with `harness run --repo /path --requirements requirements.md --config harness.yaml`. Configuration discovery checks `--config`, `HARNESS_CONFIG`, `.agent-harness/harness.yaml`, `config/harness.yaml`, and finally the packaged local configuration, in that order.
+`run` is the default command, `--repo` defaults to the containing Git root, and an inline task replaces the requirement-file ceremony. The first command creates a conversation; later `run` or `continue` commands select the latest conversation in that Git workspace unless `--new` or `--conversation <id>` is supplied. `chat` provides a multi-prompt TTY loop with `/status`, `/memory`, and `/exit`. Existing explicit usage remains supported with `harness run --repo /path --requirements requirements.md --config harness.yaml`. Configuration discovery checks `--config`, `HARNESS_CONFIG`, `.agent-harness/harness.yaml`, `config/harness.yaml`, and finally the packaged local configuration, in that order.
+
+Conversation memory survives terminal and IDE restarts under `.agent-harness/conversations/<conversation-id>/`. It is bounded and deterministically compacted; it is not an indefinitely retained model chat session. Every prompt still creates a fresh audited run and fresh role/reviewer sessions. A successful next turn starts from the exact commit produced by the previous turn, in a new isolated worktree. The command prints that worktree path so it can be opened in the IDE. No conversation turn is merged into the project's default branch automatically.
 
 `resume` reconciles persisted state with Git and classifies a clean pre-edit restart, a matching checkpoint, or manual reconciliation. Dirty editing work is never reset or discarded. `abort` writes a cooperative pause request consumed between workflow stages, and `report` creates a SHA-256 artifact index plus human-readable recovery summary.
 
@@ -46,5 +50,7 @@ Context accounting, deterministic Markdown handoffs, semantic abstraction bounda
 Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage are documented in [Milestone 7 visual feedback](docs/milestone-7-visual-feedback.md).
 
 Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
+
+Persistent multi-prompt sessions, bounded memory, IDE commands, and fail-closed continuation are documented in [Milestone 9 conversations](docs/milestone-9-conversations.md).
 
 The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.

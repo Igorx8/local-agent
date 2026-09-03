@@ -58,6 +58,7 @@ export const harnessConfigSchema = z.object({
   }).default({ allowedPaths: [], deniedPaths: [], maxChangedFilesBeforeReview: 20, maxAddedLinesBeforeReview: 800, requireDependencyChangeJustification: true, requirePublicApiChangeJustification: true, requireMigrationJustification: true }),
   security: z.object({ deniedPathPatterns: z.array(z.string()).default(["**/.env", "**/.ssh/**"]), redactPatterns: z.array(z.string()).default([]).superRefine((patterns, context) => { for (const pattern of patterns) try { new RegExp(pattern); } catch { context.addIssue({ code: "custom", message: `invalid redaction regex: ${pattern}` }); } }) }).default({ deniedPathPatterns: ["**/.env", "**/.ssh/**"], redactPatterns: [] }),
   telemetry: z.object({ jsonLogs: z.boolean().default(true), storePrompts: z.boolean().default(true), storeResponses: z.boolean().default(true) }).default({ jsonLogs: true, storePrompts: true, storeResponses: true }),
+  conversation: z.object({ maxRecentTurns: z.number().int().positive().default(8), maxMemoryBytes: z.number().int().min(4096).default(32768) }).default({ maxRecentTurns: 8, maxMemoryBytes: 32768 }),
   git: z.object({ requireCleanWorktree: z.boolean().default(true), useIsolatedWorktree: z.boolean().default(true), branchPrefix: z.string().default("agent/"), defaultBranchProtection: z.boolean().default(true) }).default({ requireCleanWorktree: true, useIsolatedWorktree: true, branchPrefix: "agent/", defaultBranchProtection: true })
 });
 

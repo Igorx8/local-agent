@@ -1,4 +1,4 @@
-import { access, realpath } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { executeConfigured } from "../tools/executor.js";
 import { assertPathWithin } from "../tools/policy.js";
@@ -22,6 +22,7 @@ export async function inspectRepository(repository: string): Promise<RepositoryI
   const dirty = (await git(canonical, ["status", "--porcelain"])).length > 0;
   return { repository: canonical, branch, commit, treeHash, dirty };
 }
+export async function ensureHarnessIgnored(repository: string): Promise<void> { const configured = await git(repository, ["rev-parse", "--git-path", "info/exclude"]); const file = path.isAbsolute(configured) ? configured : path.resolve(repository, configured); await mkdir(path.dirname(file), { recursive: true }); const current = await readFile(file, "utf8").catch(() => ""); if (!current.split(/\r?\n/).includes("/.agent-harness/")) await appendFile(file, `${current && !current.endsWith("\n") ? "\n" : ""}/.agent-harness/\n`); }
 
 export async function preflight(options: PreflightOptions): Promise<RepositoryIdentity> {
   const identity = await inspectRepository(options.repository);
@@ -31,10 +32,10 @@ export async function preflight(options: PreflightOptions): Promise<RepositoryId
   return identity;
 }
 
-export async function createWorktree(repository: string, workspaceRoot: string, worktreePath: string, branch: string): Promise<void> {
+export async function createWorktree(repository: string, workspaceRoot: string, worktreePath: string, branch: string, startPoint?: string): Promise<void> {
   const target = assertPathWithin(workspaceRoot, worktreePath);
   if (!branch.startsWith("agent/")) throw new Error("worktree branch must use agent/ prefix");
-  await git(repository, ["worktree", "add", "-b", branch, target]);
+  await git(repository, ["worktree", "add", "-b", branch, target, ...(startPoint ? [startPoint] : [])]);
 }
 
 export async function currentIdentity(repository: string): Promise<RepositoryIdentity> { return inspectRepository(repository); }

@@ -13,6 +13,7 @@ describe("harnessConfigSchema", () => {
     expect(parsed.context.handoffThreshold).toBe(0.85);
     expect(parsed.verification.flakyRepetitions).toBe(3);
     expect(parsed.verification.mutationTesting).toBe("changed-files");
+    expect(parsed.conversation).toEqual({ maxRecentTurns: 8, maxMemoryBytes: 32768 });
   });
 
   it("rejects non-loopback services", () => {

@@ -1095,6 +1095,22 @@ harness status --no-tui
 
 The TUI is observational. Workflow correctness must not depend on the UI being open.
 
+### 16.1 Conversational workspace session
+
+A conversation is a user-facing sequence of workflow runs in one Git workspace. It is not a single shared model session. Each prompt is a new turn with fresh role sessions, independent reviewers, gates, checkpoints, and artifacts. This preserves review independence while giving the user continuous project memory.
+
+Persist conversations under `.agent-harness/conversations/<conversation-id>/` with:
+
+- `conversation.json`: schema version, workspace identity, status, timestamps, active turn, and ordered run/commit relationships;
+- `memory.json`: bounded recent-turn facts and a deterministic compacted summary;
+- `events.jsonl`: user-turn lifecycle events.
+
+The first turn branches from the repository's current commit. Each later turn must branch from the exact final commit of the previous successful turn. The harness must verify that the recorded commit still exists and matches the previous run state before creating another worktree. It must never merge the conversation into the default branch automatically.
+
+Conversation memory contains user prompts, outcome summaries, decisions, commits, unresolved blockers, and artifact paths. Keep at most the configured number of recent turns verbatim. Compact older turns deterministically into factual one-line entries; do not ask a model to rewrite commit identities or other deterministic fields. Enforce a byte limit after compaction and fail closed if bounded memory cannot be produced.
+
+`harness chat` starts or resumes an interactive TTY loop. `harness continue [conversation-id] <prompt>` executes exactly one turn and emits structured output. If the conversation ID is omitted, use the latest active conversation for the current workspace; create one only when no conversation exists. EOF exits chat without changing workflow state. `/status`, `/memory`, and `/exit` are read-only chat commands.
+
 ## 17. Persistence and artifacts
 
 Per-run structure:
@@ -1275,6 +1291,10 @@ telemetry:
   historicalModelMetrics: true
   metricsByRoleLanguageAndTaskType: true
 
+conversation:
+  maxRecentTurns: 8
+  maxMemoryBytes: 32768
+
 git:
   requireCleanWorktree: true
   useIsolatedWorktree: true
@@ -1302,6 +1322,8 @@ harness model stop
 harness handoff <run-id>
 harness abort <run-id>
 harness report <run-id>
+harness chat [conversation-id]
+harness continue [conversation-id] <prompt>
 ```
 
 `model start` and `model switch` accept only registry aliases, resolve the corresponding exact artifact and launch profile, and block until identity and health checks pass. `model smoke` performs a minimal completion and a tool-call capability check without granting repository write access. Normal autonomous runs invoke these same lifecycle operations internally; these commands exist for diagnostics and visual/manual verification.
@@ -1415,6 +1437,17 @@ Suggested exit codes:
 - AC-049: API credentials are obtained through `LLAMA_API_KEY`, are never committed, and are redacted from process logs, state, reports, and handoffs.
 - AC-050: Unknown, inactive, mismatched, or unavailable model aliases fail closed and never route to a default model.
 
+### Conversational workspace sessions
+
+- AC-051: A user can submit multiple prompts to one persistent workspace conversation.
+- AC-052: Every prompt creates a separately auditable workflow run and never overwrites artifacts from an earlier turn.
+- AC-053: A successful next turn starts from the exact commit produced by the previous successful turn, without merging into the default branch.
+- AC-054: Conversation memory records user intent, run outcome, commit identity, decisions, and artifact references without storing an unbounded transcript.
+- AC-055: Conversation memory has deterministic size/turn limits and compacts older turns into a bounded summary before overflow.
+- AC-056: Repository and requirements reviewers still use fresh independent model sessions on every conversational turn.
+- AC-057: A failed, paused, escalated, dirty, or Git-mismatched previous turn fails closed and requires recovery before another mutating prompt.
+- AC-058: `harness chat` works interactively in a TTY, while `harness continue` accepts one prompt non-interactively for IDE tasks and scripts.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1517,6 +1550,16 @@ Suggested exit codes:
 ### Milestone 8: hardening
 
 - recovery, security tests, E2E runs, reproducibility validation, documentation, and benchmark report.
+
+### Milestone 9: conversational workspace sessions
+
+- persistent conversation state above individual workflow runs;
+- interactive `chat` and non-interactive `continue` commands;
+- one immutable run per user turn;
+- next-turn branches based on the previous successful checkpoint commit;
+- bounded semantic memory with deterministic compaction and artifact references;
+- fail-closed recovery and Git identity checks between turns;
+- TTY and non-TTY behavioral tests for AC-051–AC-058.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
 
