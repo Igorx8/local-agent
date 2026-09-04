@@ -3,16 +3,24 @@ import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const executeFile = promisify(execFile);
-export interface MachineMetrics { gpu?: { utilizationPercent: number; vramUsedMiB: number; vramTotalMiB: number; temperatureC: number; powerW: number }; ram: { usedMiB: number; totalMiB: number }; swap: { usedMiB: number; totalMiB: number }; llamaPid?: number; }
+export interface MachineMetrics { gpu?: { utilizationPercent: number; vramUsedMiB: number; vramTotalMiB: number; temperatureC: number; powerW: number }; ram: { usedMiB: number; totalMiB: number }; swap: { usedMiB: number; totalMiB: number }; llamaPid?: number; modelProcessCount?: number; }
 
 function memoryValue(text: string, key: string): number { return Number(text.match(new RegExp(`^${key}:\\s+(\\d+)`, "m"))?.[1] ?? 0) / 1024; }
 export async function collectMachineMetrics(llamaPid?: number): Promise<MachineMetrics> {
   const memory = await readFile("/proc/meminfo", "utf8"); const total = memoryValue(memory, "MemTotal"); const available = memoryValue(memory, "MemAvailable"); const swapTotal = memoryValue(memory, "SwapTotal"); const swapFree = memoryValue(memory, "SwapFree");
   const result: MachineMetrics = { ram: { usedMiB: total - available, totalMiB: total }, swap: { usedMiB: swapTotal - swapFree, totalMiB: swapTotal }, llamaPid };
+  const [gpuQuery, processQuery] = await Promise.allSettled([
+    executeFile("nvidia-smi", ["--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw", "--format=csv,noheader,nounits"], { timeout: 2000, killSignal: "SIGKILL" }),
+    executeFile("nvidia-smi", ["--query-compute-apps=process_name", "--format=csv,noheader,nounits"], { timeout: 2000, killSignal: "SIGKILL" })
+  ]);
   try {
-    const { stdout } = await executeFile("nvidia-smi", ["--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw", "--format=csv,noheader,nounits"], { timeout: 3000 });
+    if (gpuQuery.status === "rejected") throw gpuQuery.reason; const { stdout } = gpuQuery.value;
     const values = stdout.trim().split("\n")[0]?.split(",").map((value) => Number(value.trim()));
     if (values?.length === 5 && values.every(Number.isFinite)) result.gpu = { utilizationPercent: values[0]!, vramUsedMiB: values[1]!, vramTotalMiB: values[2]!, temperatureC: values[3]!, powerW: values[4]! };
   } catch { /* NVIDIA telemetry is optional and must never affect the workflow. */ }
+  try {
+    if (processQuery.status === "rejected") throw processQuery.reason; const { stdout } = processQuery.value;
+    result.modelProcessCount = stdout.split("\n").filter((line) => /llama-server/.test(line)).length;
+  } catch { result.modelProcessCount = 0; }
   return result;
 }

@@ -18,7 +18,7 @@ function jsonFromText(text: string): unknown {
 export function structuredPrompt(prompt: string, schema: z.ZodType): string { return `${prompt}\nExact JSON Schema for the only accepted response:\n${JSON.stringify(z.toJSONSchema(schema), null, 2)}`; }
 
 export class OpenCodeRoleRunner implements RoleRunner {
-  constructor(private readonly sessions: OpencodeSessions, private readonly models: ModelLifecycle, private readonly config: HarnessConfig, private readonly onSession?: (role: AgentRole, sessionID: string) => Promise<void> | void, private readonly contextWindows: Record<string, number> = {}) {}
+  constructor(private readonly sessions: OpencodeSessions, private readonly models: ModelLifecycle, private readonly config: HarnessConfig, private readonly onSession?: (role: AgentRole, sessionID: string) => Promise<void> | void, private readonly contextWindows: Record<string, number> = {}, private readonly shutdownSignal?: AbortSignal) {}
   async invoke<T>(invocation: RoleInvocation, schema: z.ZodType<T>): Promise<RoleResult<T>> {
     const configured = this.config.models[invocation.role];
     const selection = parseModelAlias(configured); const alias = selection.modelID;
@@ -29,7 +29,11 @@ export class OpenCodeRoleRunner implements RoleRunner {
     const startedAt = performance.now();
     const effectivePrompt = structuredPrompt(invocation.prompt, schema);
     try {
-      await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: agentNames[invocation.role], model: selection, signal: AbortSignal.timeout(this.config.workflow.inferenceTimeoutMs) });
+      const timeout = AbortSignal.timeout(this.config.workflow.inferenceTimeoutMs); const signal = this.shutdownSignal ? AbortSignal.any([timeout, this.shutdownSignal]) : timeout;
+      await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: agentNames[invocation.role], model: selection, signal });
+    } catch (error) {
+      if (this.shutdownSignal?.aborted) await this.sessions.abort(session.id).catch(() => false);
+      throw error;
     } finally { this.models.endRequest(alias); }
     const messages = await this.sessions.messages(session.id);
     const response = [...messages].reverse().find((message) => message.info.role === "assistant");

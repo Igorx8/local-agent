@@ -148,6 +148,9 @@ export class WorkflowEngine {
       return this.state;
     } catch (error) {
       if (error instanceof RunPaused) return this.state;
+      if (await this.dependencies.pauseRequested?.() === true) {
+        const pausedFromStage = this.state.stage; this.state = { ...this.state, stage: "PAUSED", status: "paused", pausedFromStage, mutatingActionsBlocked: true }; await this.store.write(this.state); await this.dependencies.clearPauseRequest?.(); await this.observe({ type: "run.paused", message: "Active model request cancelled for cooperative pause", data: { pausedFromStage } }); return this.state;
+      }
       await this.artifact("logs/workflow-error.json", { stage: this.state.stage, error: error instanceof Error ? error.message : String(error) }); await this.observe({ type: "error", message: error instanceof Error ? error.message : String(error), data: { stage: this.state.stage } });
       if (!["SUCCEEDED", "FAILED", "ESCALATED"].includes(this.state.stage)) { const target = this.state.stage === "PREFLIGHT" || this.state.stage === "BASELINE_GATES_RUNNING" || this.state.stage === "IMPLEMENTATION_CHECKPOINT" || this.state.stage === "REPAIR_CHECKPOINT" ? "FAILED" : "ESCALATED"; await this.transition(target); }
       return this.state;

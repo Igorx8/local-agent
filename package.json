@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e:projects": "npm run build && node scripts/e2e-projects.mjs",
+    "validate:operational": "npm run build && node scripts/operational-validation.mjs",
     "dev": "tsx src/cli.ts"
   },
   "engines": {

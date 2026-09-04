@@ -1,6 +1,7 @@
 # Local Multi-Agent Engineering Harness
 
 Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–10 are implemented, including persistent workspace conversations, audited isolated runs, and strict single-model GPU residency.
+Milestone 11 operational validation is documented in [docs/milestone-11-operational-validation.md](docs/milestone-11-operational-validation.md).
 
 ## Where it runs
 

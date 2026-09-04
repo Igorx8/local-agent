@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "output": ".agent-harness/operational-validation/report.json",
+  "sampleIntervalMs": 2000,
+  "scenarios": [
+    {
+      "id": "multi_turn",
+      "command": "fish",
+      "args": ["-lc", "harness-validation-multi-turn /absolute/path/to/test-workspace"],
+      "cwd": "/absolute/path/to/test-workspace",
+      "timeoutMs": 3600000,
+      "expectedExitCodes": [0],
+      "blockedExitCodes": [77],
+      "maximumModelProcesses": 1,
+      "maximumSwapGrowthMiB": 512
+    }
+  ]
+}

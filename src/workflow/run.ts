@@ -27,7 +27,7 @@ import { persistRecoveryPlan, reconcileRun } from "../recovery/reconcile.js";
 import type { ModelLifecycle } from "../models/types.js";
 import { appendEvent } from "../telemetry/events.js";
 
-export interface StartRunOptions { repository: string; requirementsFile?: string; requirements?: string; config: HarnessConfig; definitionOfDone?: string; baseRef?: string; conversation?: { id: string; turn: number }; onCreated?(runId: string): Promise<void> | void; }
+export interface StartRunOptions { repository: string; requirementsFile?: string; requirements?: string; config: HarnessConfig; definitionOfDone?: string; baseRef?: string; conversation?: { id: string; turn: number }; signal?: AbortSignal; onCreated?(runId: string): Promise<void> | void; }
 function runIdentifier(): string { return `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`; }
 function slug(value: string): string { return path.basename(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "task"; }
 export async function stopRunModel(manager: ModelLifecycle, store: StateStore, artifacts: string): Promise<void> {
@@ -53,7 +53,7 @@ export async function startRun(options: StartRunOptions): Promise<RunState> {
     const client = connectOpencode({ baseUrl: options.config.runtime.opencodeUrl, directory: worktree }); const sessions = new OpencodeSessions(client, worktree);
     const manifest = await createReproducibilityManifest(artifacts, options.config, registry); initial.modelManifest = manifest; await store.write(initial); const manager = createModelManager(options.config, { registry, router: {}, process: {} });
     const contextWindows = Object.fromEntries(Object.entries(registry.models).map(([alias, model]) => [alias, model.contextSize]));
-    const roleRunner = new OpenCodeRoleRunner(sessions, manager, options.config, async (role, sessionID) => { await writeArtifact(artifacts, `sessions/${Date.now()}-${role}-${sessionID}.json`, { role, sessionID, createdAt: new Date().toISOString() }); }, contextWindows);
+    const roleRunner = new OpenCodeRoleRunner(sessions, manager, options.config, async (role, sessionID) => { const current = await store.read(); current.activeSession = { role, sessionId: sessionID }; await store.write(current); await writeArtifact(artifacts, `sessions/${Date.now()}-${role}-${sessionID}.json`, { role, sessionID, createdAt: new Date().toISOString() }); }, contextWindows, options.signal);
     const dependencies: WorkflowDependencies = {
       async manualHandoffRequested() { try { await access(path.join(artifacts, "manual-handoff-request.json")); return true; } catch { return false; } },
       async clearManualHandoffRequest() { await unlink(path.join(artifacts, "manual-handoff-request.json")).catch(() => undefined); },
