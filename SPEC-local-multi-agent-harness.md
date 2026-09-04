@@ -1463,6 +1463,16 @@ Suggested exit codes:
 - AC-060: Resource-release timeout fails closed without sending a load request for the next model, and the final model is unloaded on every workflow exit path.
 - AC-061: A context handoff is persisted, validated, and bootstrapped before the lifecycle manager may unload the model that produced it.
 
+### Operational resilience validation
+
+- AC-062: A live conversation completes at least three cumulative prompts, and every turn starts from the exact successful checkpoint commit of the preceding turn while retaining bounded memory.
+- AC-063: A live seeded defect exercises reviewer discovery, finding validation, repair-model switching, fail-before/pass-after regression proof, repeated gates, and final success.
+- AC-064: A live run crosses at least two forced context handoffs, validates each bootstrap against Git and semantic state, and completes without duplicate mutation.
+- AC-065: A first `Ctrl+C` produces a cooperative pause, persists a recoverable state, unloads the active model, and `harness resume` completes from the last consistent checkpoint.
+- AC-066: After a host reboot, Fish and an IDE terminal can start the harness from an arbitrary Git workspace without repository-specific manual environment setup.
+- AC-067: A forced client interruption explicitly cancels the accepted OpenCode server-side session and unloads its model; no residual session may resume inference or reload a model later.
+- AC-068: A bounded endurance run of at least five consecutive prompts finishes without simultaneous model processes, residual GPU allocation, swap growth attributable to leaked model mappings, or unbounded agent steps.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1583,6 +1593,19 @@ Suggested exit codes:
 - fail-closed VRAM threshold and shutdown timeout;
 - final model cleanup on every workflow exit path;
 - delayed-release and no-next-load tests for AC-059–AC-061.
+
+### Milestone 11: operational resilience and IDE validation
+
+- add an automated live-validation driver that records timestamps, model/session IDs, process counts, VRAM, RAM, and swap without embedding credentials;
+- validate a three-turn persistent conversation and exact checkpoint ancestry for AC-062;
+- seed a deterministic repairable defect and retain reviewer, triage, regression-proof, gate, and final-audit evidence for AC-063;
+- force at least two context handoffs with a test-only threshold override and verify continuity for AC-064;
+- validate cooperative pause/resume and model cleanup for AC-065;
+- validate cold startup through Fish and the documented IDE command after a real reboot for AC-066;
+- make forced interruption cancel the active OpenCode session before or alongside model unload, then prove no residual inference for AC-067;
+- run five bounded sequential prompts while sampling process and memory state for AC-068;
+- classify each scenario as passed, failed, or blocked; never infer runtime success from unit tests;
+- publish a reproducible operational-validation report and stop after Milestone 11 for review.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
 
