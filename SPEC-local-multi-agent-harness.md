@@ -1215,7 +1215,7 @@ runtime:
   llamaUrl: http://127.0.0.1:8080
   modelStrategy: router
   modelStartupTimeoutMs: 600000
-  modelShutdownTimeoutMs: 30000
+    modelShutdownTimeoutMs: 60000
   modelUnloadVramThresholdMiB: 2048
   localOnly: true
 
@@ -1606,6 +1606,8 @@ Suggested exit codes:
 - run five bounded sequential prompts while sampling process and memory state for AC-068;
 - classify each scenario as passed, failed, or blocked; never infer runtime success from unit tests;
 - publish a reproducible operational-validation report and stop after Milestone 11 for review.
+
+Performance findings captured during Milestone 11 must feed a later optimization milestone. In particular, reports must distinguish model load/unload time, inference time, tool-step count, structured-output retries, deterministic gates, and verification time. Any future risk-proportional policy must retain deterministic gates and independent review while calibrating per-role step budgets; it must not claim improvement from merely skipping evidence-producing stages.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
 

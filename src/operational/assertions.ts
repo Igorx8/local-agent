@@ -29,6 +29,13 @@ export async function assertPausedRun(runDirectory: string): Promise<Operational
   return result(evidence, failures);
 }
 
+export async function assertPauseResume(runDirectory: string): Promise<OperationalAssertion> {
+  const state = await runState(runDirectory); const events = await readEvents(runDirectory, Number.MAX_SAFE_INTEGER); const evidence = [`status=${state.status}`, `stage=${state.stage}`, `model=${state.activeModel?.lifecycle ?? "none"}`]; const failures: string[] = [];
+  if (state.status !== "succeeded" || state.stage !== "SUCCEEDED") failures.push("resumed run did not succeed"); if (!events.some((event) => event.type === "run.paused")) failures.push("run.paused event is missing"); if (state.activeModel?.lifecycle !== "stopped") failures.push("model was not released after resumed completion");
+  const paused = events.find((event) => event.type === "run.paused"); if (paused) evidence.push(`pause=${paused.timestamp}`);
+  return result(evidence, failures);
+}
+
 export async function assertEndurance(workspace: string, conversationId: string): Promise<OperationalAssertion> {
   const conversationResult = await assertMultiTurn(workspace, conversationId, 5); const conversation = conversationStateSchema.parse(JSON.parse(await readFile(path.join(workspace, ".agent-harness", "conversations", conversationId, "conversation.json"), "utf8")));
   for (const turn of conversation.turns) if (turn.artifactPath) { const state = await runState(turn.artifactPath); if (state.activeModel?.lifecycle !== "stopped") conversationResult.failures.push(`turn ${turn.sequence} retained an active model`); }

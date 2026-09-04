@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { assertColdStart, assertMultiTurn, assertRunCounter } from "../src/operational/assertions.js";
+import { assertColdStart, assertMultiTurn, assertPauseResume, assertRunCounter } from "../src/operational/assertions.js";
 import { StateStore } from "../src/state/store.js";
 import type { RunState } from "../src/state/types.js";
 
@@ -21,5 +21,11 @@ describe("operational evidence assertions", () => {
 
   it("keeps cold-start evidence blocked until boot identity changes", async () => {
     expect(await assertColdStart("/missing/cold-start-receipt.json")).toMatchObject({ passed: false, blocked: true });
+  });
+
+  it("proves a paused run later completed and released its model", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "pause-resume-")); const completed = state(root); await new StateStore(root).initialize(completed);
+    await writeFile(path.join(root, "events.jsonl"), `${JSON.stringify({ schemaVersion: 1, at: new Date().toISOString(), type: "run.paused", message: "paused" })}\n`);
+    expect(await assertPauseResume(root)).toMatchObject({ passed: true, failures: [] });
   });
 });

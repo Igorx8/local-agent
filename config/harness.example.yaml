@@ -4,7 +4,7 @@ runtime:
   llamaUrl: http://127.0.0.1:8080
   modelStrategy: router
   modelStartupTimeoutMs: 600000
-  modelShutdownTimeoutMs: 30000
+  modelShutdownTimeoutMs: 60000
   modelUnloadVramThresholdMiB: 2048
   localOnly: true
 modelRegistry: ./config/models.local.yaml

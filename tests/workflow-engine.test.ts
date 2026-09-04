@@ -47,9 +47,11 @@ const baseOutputs = (): Record<string, unknown[]> => ({
 describe("WorkflowEngine", () => {
   it("converts an aborted active request into a recoverable cooperative pause", async () => {
     const fixture = await setup(baseOutputs()); let requested = false; fixture.dependencies.pauseRequested = async () => requested; fixture.dependencies.clearPauseRequest = async () => {};
-    fixture.roles.invoke = async () => { requested = true; throw new Error("aborted"); };
+    fixture.roles.invoke = async () => { requested = true; const persisted = await fixture.store.read(); persisted.activeSession = { role: "planner", sessionId: "ses-active" }; await fixture.store.write(persisted); throw new Error("aborted"); };
     const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
     expect(result).toMatchObject({ stage: "PAUSED", status: "paused", pausedFromStage: "ACCEPTANCE_CRITERIA_GENERATING", mutatingActionsBlocked: true });
+    expect(result.counters.inferenceRetries).toBe(0);
+    expect(result.activeSession).toEqual({ role: "planner", sessionId: "ses-active" });
   });
 
   it("completes the core workflow and hides oracle from initial implementation", async () => {

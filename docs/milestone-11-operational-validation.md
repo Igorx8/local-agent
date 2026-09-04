@@ -4,7 +4,7 @@ Milestone 11 separates deterministic implementation coverage from evidence that 
 
 ## Cooperative interruption
 
-The active OpenCode session is persisted as soon as it is created. On the first `Ctrl+C`, the CLI writes the pause request and aborts the shared signal. The role runner then calls the typed OpenCode session-abort API, the workflow persists `PAUSED`, and final cleanup unloads the model. A second interrupt remains an emergency process exit and must not be used as the normal pause path.
+The active OpenCode session is persisted as soon as it is created, including during recovery. On the first `Ctrl+C`, the CLI writes the pause request, explicitly cancels the accepted server-side session, and aborts the shared signal. The role runner also calls the typed OpenCode session-abort API, the workflow persists `PAUSED`, and final cleanup unloads the model. The same cooperative signal handling applies to `harness resume`. A second interrupt remains an emergency process exit and must not be used as the normal pause path.
 
 `harness resume <run-id> --repo <workspace>` reconciles Git before restarting. A clean pre-edit interruption restarts the idempotent prefix; a clean implementation/repair checkpoint resumes from its gates. Dirty or mismatched Git remains a manual reconciliation.
 
@@ -39,6 +39,8 @@ Stage durations are recorded to support a later risk-proportional execution poli
 
 ## Validation status
 
-- The deterministic suite covers signal propagation, OpenCode session cancellation, recoverable pause classification, evidence assertions, resource-limit classification, and stage-duration aggregation.
+- The deterministic suite covers signal propagation, explicit persisted-session cancellation, recoverable pause classification, pause/resume evidence assertions, resource-limit classification, and stage-duration aggregation.
 - The earlier successful production run proves the normal one-model workflow, but does not substitute for the new repair, forced-handoff, pause/resume, multi-turn, and endurance scenarios.
+- A live pause test stopped during `testArchitect`, persisted `PAUSED`, performed no abort retry, and released the model. A subsequent resume reached a clean implementation checkpoint and passed both configured gates, but the repository reviewer exhausted repeated tool steps and produced invalid structured output. The run was cooperatively paused again with its checkpoint intact. This is failure evidence, not an AC-065 pass.
+- The observed simple two-file task spent most of its wall time in three repository-review attempts. Each attempt was bounded by OpenCode's installed and type-verified `maxSteps`, but the current reviewer limit of 32 permits minutes of low-value file discovery at roughly seven generated tokens/second. A later optimization milestone must calibrate role-specific step budgets and risk-proportional review from operational data; Milestone 11 does not weaken review to mask this result.
 - AC-066 remains runtime-blocked until a real host reboot is performed.
