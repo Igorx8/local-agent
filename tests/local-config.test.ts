@@ -23,6 +23,6 @@ describe("OpenCode local configuration", () => {
   it("maps all read and verification roles to qwen36-main and exposes only two aliases", async () => {
     const registry = YAML.parse(await readFile(path.resolve("config/models.example.yaml"), "utf8")); const opencode = JSON.parse(await readFile(path.resolve("config/opencode.example.json"), "utf8"));
     expect(Object.keys(registry.models)).toEqual(["qwen36-main", "qwen3-coder-impl"]); expect(registry.models["qwen36-main"].roles).toEqual(expect.arrayContaining(["repositoryReviewer", "requirementsReviewer", "adversarialVerifier"]));
-    expect(Object.keys(opencode.provider["llama.cpp"].models)).toEqual(["qwen36-main", "qwen3-coder-impl"]); expect(opencode.agent["repository-reviewer"].model).toBe("llama.cpp/qwen36-main"); expect(opencode.agent["adversarial-verifier"].model).toBe("llama.cpp/qwen36-main");
+    expect(Object.keys(opencode.provider["llama.cpp"].models)).toEqual(["qwen36-main", "qwen3-coder-impl"]); expect(opencode.agent["repository-reviewer"]).toMatchObject({ model: "llama.cpp/qwen36-main", maxSteps: 8 }); expect(opencode.agent["adversarial-verifier"]).toMatchObject({ model: "llama.cpp/qwen36-main", maxSteps: 8 }); expect(opencode.agent["final-auditor"]).toMatchObject({ model: "llama.cpp/qwen36-main", maxSteps: 8 });
   });
 });
