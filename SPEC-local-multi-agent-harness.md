@@ -64,24 +64,23 @@ The harness must not treat LLM opinions as the source of truth. Tests, lint, typ
 | Planner | `qwen36-main` | Requirements, acceptance criteria, plan, risks | Read-only |
 | Test architect | `qwen36-main` | Design implementation-independent acceptance and oracle tests in a fresh session | Read-only source access; write only to isolated oracle-test artifacts |
 | Implementer | `qwen3-coder-impl` | Implement approved plan and tests | Read, edit, approved quality commands |
-| Repository reviewer | `devstral-repo` | Repository navigation, integration, regression, scope, and maintainability review | Read-only and approved diagnostic commands |
+| Repository reviewer | `qwen36-main` | Repository navigation, integration, regression, scope, and maintainability review | Read-only and approved diagnostic commands |
 | Requirements reviewer | `qwen36-main` | Independently compare implementation with requirements and acceptance criteria | Read-only, fresh session |
 | Finding validator | `qwen36-main` | Confirm/reject reviewer findings against evidence | Read-only |
 | Repair agent | `qwen3-coder-impl` | Fix confirmed findings only | Read, edit, approved quality commands |
-| Adversarial verifier | Configurable, default `devstral-repo` | Generate evidence-driven edge cases and challenge tests | Read-only source; isolated test artifacts |
+| Adversarial verifier | `qwen36-main` | Generate evidence-driven edge cases and challenge tests | Read-only source; isolated test artifacts |
 | Final auditor | `qwen36-main` | Compare final state against requirements | Read-only |
 
 Roles must be configurable. No role name may be hard-coded into the state machine.
 
 ### 4.1 Installed model registry
 
-The first implementation targets the three GGUF artifacts already installed and tested on this workstation. These identifiers are normative; Codex must not infer, shorten, or silently substitute a different repository, quantization, or alias.
+The implementation targets the two GGUF artifacts selected and tested on this workstation. These identifiers are normative; Codex must not infer, shorten, or silently substitute a different repository, quantization, or alias.
 
 | Stable alias | Exact Hugging Face reference | Approx. artifact size | Reasoning | Intended use |
 |---|---|---:|---|---|
-| `qwen36-main` | `unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S` | 13.7 GB | `auto`, budget 8192 | Supervisor, planning, test architecture, requirements validation, finding validation, final audit |
+| `qwen36-main` | `unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S` | 13.7 GB | `auto`, budget 8192 | Supervisor, planning, test architecture, repository and requirements review, finding validation, adversarial verification, final audit |
 | `qwen3-coder-impl` | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL` | 17.7 GB | `off` | Initial implementation and focused repairs |
-| `devstral-repo` | `bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S` | 13.55 GB | `off` | Repository review and adversarial verification |
 
 The sizes above are identification hints, not integrity checks. During Milestone 0, `harness doctor` must resolve the actual cached GGUF path or shards and record their byte sizes and SHA-256 hashes. A mismatch must be reported; it must not trigger an automatic redownload or model replacement.
 
@@ -103,7 +102,7 @@ models:
     reasoning: auto
     reasoningBudget: 8192
     reasoningPreserve: true
-    roles: [supervisor, planner, testArchitect, requirementsReviewer, validator, auditor]
+    roles: [supervisor, planner, testArchitect, repositoryReviewer, requirementsReviewer, validator, adversarialVerifier, auditor]
 
   qwen3-coder-impl:
     hfRef: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL
@@ -113,15 +112,6 @@ models:
     parallel: 1
     reasoning: off
     roles: [implementer, repair]
-
-  devstral-repo:
-    hfRef: bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S
-    quantization: Q4_K_S
-    approximateArtifactGiB: 13.55
-    contextSize: 65536
-    parallel: 1
-    reasoning: off
-    roles: [repositoryReviewer, adversarialVerifier]
 
 commonServerArgs:
   host: 127.0.0.1
@@ -166,7 +156,7 @@ curl -sS http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
-Replace only the JSON `model` value with `qwen3-coder-impl` or `devstral-repo` when that model is active. A request naming an inactive alias must cause the lifecycle manager to switch models first; it must not fall back to another model.
+Replace only the JSON `model` value with `qwen3-coder-impl` when that model is active. A request naming an inactive alias must cause the lifecycle manager to switch models first; it must not fall back to another model.
 
 ### 4.3 Exact explicit-process commands
 
@@ -214,19 +204,6 @@ llama serve \
   --fit on --fit-target 2048 --metrics
 ```
 
-Repository-review model:
-
-```bash
-llama serve \
-  -hf bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S \
-  --alias devstral-repo \
-  --no-mmproj --host 127.0.0.1 --port 8080 \
-  --api-key "$LLAMA_API_KEY" --cors-origins localhost \
-  --ctx-size 65536 --parallel 1 --jinja --load-mode none --reasoning off \
-  --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
-  --fit on --fit-target 2048 --metrics
-```
-
 The process adapter must construct these commands as an argument array, never as an interpolated shell string. Before adopting a flag, `doctor` must compare it with the locally installed `llama serve --help`; version drift is an explicit compatibility failure or ADR, not permission to silently omit the setting.
 
 ### 4.4 Router preset generation
@@ -260,9 +237,6 @@ reasoning-preserve = true
 model = /ABSOLUTE/RESOLVED/PATH/qwen3-coder-impl.gguf
 reasoning = off
 
-[devstral-repo]
-model = /ABSOLUTE/RESOLVED/PATH/devstral-repo.gguf
-reasoning = off
 ```
 
 Launch the router with the locally supported server entry point equivalent to:
@@ -279,7 +253,7 @@ The generated preset must be validated against the installed version. If a shard
 
 ### 4.5 OpenCode provider mapping
 
-The generated local OpenCode configuration must map all three stable aliases to the same local OpenAI-compatible endpoint:
+The generated local OpenCode configuration must map both stable aliases to the same local OpenAI-compatible endpoint:
 
 ```json
 {
@@ -297,8 +271,7 @@ The generated local OpenCode configuration must map all three stable aliases to 
       },
       "models": {
         "qwen36-main": {"name": "Qwen3.6 35B A3B UD-IQ3_S"},
-        "qwen3-coder-impl": {"name": "Qwen3 Coder 30B A3B UD-Q4_K_XL"},
-        "devstral-repo": {"name": "Devstral Small 2 24B Q4_K_S"}
+        "qwen3-coder-impl": {"name": "Qwen3 Coder 30B A3B UD-Q4_K_XL"}
       }
     }
   },
@@ -310,7 +283,7 @@ The generated local OpenCode configuration must map all three stable aliases to 
 }
 ```
 
-Agent definitions then select exactly `llama.cpp/qwen36-main`, `llama.cpp/qwen3-coder-impl`, or `llama.cpp/devstral-repo` according to the role table. The configuration generator must merge these fields with project configuration without deleting unrelated user settings.
+Agent definitions then select exactly `llama.cpp/qwen36-main` or `llama.cpp/qwen3-coder-impl` according to the role table. The configuration generator must merge these fields with project configuration without deleting unrelated user settings.
 
 ## 5. High-level architecture
 
@@ -1228,11 +1201,11 @@ models:
   planner: llama.cpp/qwen36-main
   testArchitect: llama.cpp/qwen36-main
   implementer: llama.cpp/qwen3-coder-impl
-  repositoryReviewer: llama.cpp/devstral-repo
+  repositoryReviewer: llama.cpp/qwen36-main
   requirementsReviewer: llama.cpp/qwen36-main
   validator: llama.cpp/qwen36-main
   repair: llama.cpp/qwen3-coder-impl
-  adversarialVerifier: llama.cpp/devstral-repo
+  adversarialVerifier: llama.cpp/qwen36-main
   auditor: llama.cpp/qwen36-main
 
 workflow:
@@ -1324,9 +1297,9 @@ harness status [run-id]
 harness logs <run-id> --follow
 harness model list
 harness model status
-harness model start <qwen36-main|qwen3-coder-impl|devstral-repo>
-harness model switch <qwen36-main|qwen3-coder-impl|devstral-repo>
-harness model smoke <qwen36-main|qwen3-coder-impl|devstral-repo>
+harness model start <qwen36-main|qwen3-coder-impl>
+harness model switch <qwen36-main|qwen3-coder-impl>
+harness model smoke <qwen36-main|qwen3-coder-impl>
 harness model stop
 harness handoff <run-id>
 harness abort <run-id>
@@ -1437,11 +1410,11 @@ Suggested exit codes:
 
 ### Installed-model identity and invocation
 
-- AC-043: The model registry contains the exact three Hugging Face references, quantizations, stable aliases, context settings, reasoning modes, and role mappings defined in Section 4.1.
+- AC-043: The model registry contains the exact two Hugging Face references, quantizations, stable aliases, context settings, reasoning modes, and role mappings defined in Section 4.1.
 - AC-044: OpenCode, llama.cpp requests, persisted state, telemetry, and handoffs use the same stable alias for a model.
 - AC-045: `doctor` resolves and fingerprints every installed GGUF artifact and refuses silent model or quantization substitution.
 - AC-046: Explicit-process mode starts each model with the effective launch profile defined in Section 4.3 and verifies the alias through `/v1/models` plus a smoke completion.
-- AC-047: Router mode exposes the three stable aliases, keeps at most one large model loaded, and demonstrably switches between all three aliases; otherwise the harness falls back safely to explicit-process mode.
+- AC-047: Router mode exposes the two stable aliases, keeps at most one large model loaded, and demonstrably switches between both aliases; otherwise the harness falls back safely to explicit-process mode.
 - AC-048: Each OpenCode role selects the exact `llama.cpp/<stable-alias>` identifier defined by the role mapping.
 - AC-049: API credentials are obtained through `LLAMA_API_KEY`, are never committed, and are redacted from process logs, state, reports, and handoffs.
 - AC-050: Unknown, inactive, mismatched, or unavailable model aliases fail closed and never route to a default model.
@@ -1527,8 +1500,8 @@ Suggested exit codes:
 6. Task with property-based edge cases and focused mutation testing.
 7. Task with a deliberately flaky test to verify classification.
 8. Forced low context window to trigger and semantically validate handoff quickly.
-9. Full local run using the three configured GGUF models.
-10. Sequential smoke run proving `qwen36-main -> qwen3-coder-impl -> devstral-repo -> qwen36-main`, with only one loaded model and the expected alias recorded for every response.
+9. Full local run using the two configured GGUF models.
+10. Sequential smoke run proving `qwen36-main -> qwen3-coder-impl -> qwen36-main`, with only one loaded model and the expected alias recorded for every response.
 
 ## 24. Implementation milestones
 
@@ -1538,7 +1511,7 @@ Suggested exit codes:
 - Verify the installed server entry points (`llama serve` and, if present, `llama-server`) and compare every required launch flag with local `--help` output.
 - Confirm actual SDK message token fields and SSE event shapes.
 - Confirm router model switching and unloading on this machine.
-- Resolve the three exact Hugging Face references in Section 4.1 to their cached GGUF path or shards and calculate reproducible fingerprints without duplicating model data.
+- Resolve the two exact Hugging Face references in Section 4.1 to their cached GGUF path or shards and calculate reproducible fingerprints without duplicating model data.
 - Generate and validate the local model registry, router preset, OpenCode provider mapping, and role-to-alias resolution.
 - Smoke-call each stable alias and prove tool calling for every model assigned to an agentic role.
 - Identify project-appropriate property, mutation, coverage, and flaky-test capabilities.
@@ -1646,7 +1619,6 @@ First:
 5. locate and fingerprint these exact installed artifacts without copying them:
    - qwen36-main = unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ3_S;
    - qwen3-coder-impl = unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL;
-   - devstral-repo = bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S;
 6. validate the Section 4 launch profiles against the installed CLI and smoke-call every alias;
 7. identify available baseline, property-based, mutation, coverage, and flaky-test tooling;
 8. produce a short compatibility report and an implementation plan mapped to AC IDs.

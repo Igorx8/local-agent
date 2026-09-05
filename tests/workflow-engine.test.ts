@@ -61,7 +61,7 @@ describe("WorkflowEngine", () => {
     expect(implementation?.artifactReferences.some((item) => item.includes("oracle"))).toBe(false); expect(implementation?.prompt).not.toContain("OT-1");
     const reviews = fixture.roles.invocations.filter((item) => ["repositoryReviewer", "requirementsReviewer"].includes(item.role));
     expect(new Set(reviews.map((item) => item.role)).size).toBe(2); expect(reviews.every((item) => item.freshSession)).toBe(true);
-    expect(fixture.roles.invocations.filter((item) => item.role === "adversarialVerifier")).toHaveLength(1);
+    const adversarial = fixture.roles.invocations.filter((item) => item.role === "adversarialVerifier"); expect(adversarial).toHaveLength(1); expect(adversarial[0]?.prompt).toContain("copy only exact criterion IDs");
   });
   it("validates a high finding, performs one focused repair, and re-reviews", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", file: "src/x.ts", lineStart: 1, problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };

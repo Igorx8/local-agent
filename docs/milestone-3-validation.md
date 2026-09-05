@@ -17,9 +17,8 @@ The v1.2 registry was resolved against the Hugging Face cache without downloadin
 |---|---:|---|
 | `qwen36-main` | 13,676,723,168 | `66a3ca888ce13482b40c333db2432c0ebde3a7b13754fc29f0c6f5e89703ec66` |
 | `qwen3-coder-impl` | 17,665,334,432 | `2841aa314d916434860cfb8990347528dcdfe5c350dbcb9d1461dbee88ff2533` |
-| `devstral-repo` | 13,549,808,512 | `560edb4011d202f8c01f01b44a8192ac9ad62a8aa2e80b41d81af6900f240450` |
 
-Both installed entry points support all flags required by Sections 4.3 and 4.4. Explicit-process mode and router mode each completed the sequence `qwen36-main -> qwen3-coder-impl -> devstral-repo -> qwen36-main`. At each step only the requested stable alias was loaded, the runtime `--model` path matched the fingerprint manifest, and both a completion and forced function-tool call passed. The final servers were stopped and GPU resources released.
+Both installed entry points support all flags required by Sections 4.3 and 4.4. Explicit-process mode and router mode completed sequential switching across the configured aliases. At each step only the requested stable alias was loaded, the runtime `--model` path matched the fingerprint manifest, and both a completion and forced function-tool call passed. The current registry contains the two Qwen aliases; the final servers were stopped and GPU resources released.
 
 ## Smoke model
 

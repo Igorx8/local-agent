@@ -15,11 +15,11 @@ models:
   planner: llama.cpp/qwen36-main
   testArchitect: llama.cpp/qwen36-main
   implementer: llama.cpp/qwen3-coder-impl
-  repositoryReviewer: llama.cpp/devstral-repo
+  repositoryReviewer: llama.cpp/qwen36-main
   requirementsReviewer: llama.cpp/qwen36-main
   validator: llama.cpp/qwen36-main
   repair: llama.cpp/qwen3-coder-impl
-  adversarialVerifier: llama.cpp/devstral-repo
+  adversarialVerifier: llama.cpp/qwen36-main
   auditor: llama.cpp/qwen36-main
 workflow:
   maxReviewIterations: 3

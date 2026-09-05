@@ -38,7 +38,7 @@ Conversation memory survives terminal and IDE restarts under `.agent-harness/con
 
 While a run is active, `harness handoff <run-id> --repo /absolute/project` requests a manual handoff at the next safe model-action boundary.
 
-`model prepare` resolves the three exact Hugging Face cache artifacts, fingerprints them, and generates ignored `config/models.local.yaml`, `config/models.local.ini`, and `config/opencode.local.json` files. It never downloads or substitutes a model. Export `LLAMA_API_KEY` outside the repository, then use `harness model list|status|start|switch|smoke|stop` for manual IDE diagnostics. Stable aliases—not role names—are sent to llama.cpp.
+`model prepare` resolves the two exact Hugging Face cache artifacts, fingerprints them, and generates ignored `config/models.local.yaml`, `config/models.local.ini`, and `config/opencode.local.json` files. It never downloads or substitutes a model. Export `LLAMA_API_KEY` outside the repository, then use `harness model list|status|start|switch|smoke|stop` for manual IDE diagnostics. Stable aliases—not role names—are sent to llama.cpp.
 
 Only one large model may reside in VRAM. A role change finishes its response and any validated handoff, confirms the previous alias is unloaded, waits for NVIDIA VRAM usage to fall to `runtime.modelUnloadVramThresholdMiB`, and only then loads the next alias. `modelShutdownTimeoutMs` fails closed: the next model is not started if resources remain occupied. The last model is unloaded when the workflow exits.
 

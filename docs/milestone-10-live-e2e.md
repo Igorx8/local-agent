@@ -6,14 +6,14 @@ The production router, OpenCode 1.18.25, all three configured GGUF artifacts, an
 
 The task added and documented `normalizeSku`, with Node tests for whitespace, case conversion, an already normalized value, and empty input. Baseline gates, implementation gates, repository review, requirements review, finding validation, adversarial verification, and final audit all completed. The run ended `SUCCEEDED` with zero inference retries and zero repair iterations. Its final model lifecycle is `stopped`.
 
-Observed model sequence included `qwen36-main -> qwen3-coder-impl -> devstral-repo -> qwen36-main -> devstral-repo -> qwen36-main`. NVIDIA sampling at every transition showed one `llama-server` compute process, never two. The controlled standalone switch test also completed `qwen36-main -> qwen3-coder-impl -> devstral-repo -> stop`, with each alias healthy before the next transition and VRAM returning to the non-model baseline.
+Observed model switching across the then-configured aliases showed one `llama-server` compute process, never two. The controlled standalone switch test likewise kept each alias healthy before the next transition and returned VRAM to the non-model baseline. The current registry has since been reduced to the two Qwen aliases.
 
 ## Findings fixed during validation
 
 - Reusing the already healthy sole router alias is now idempotent instead of issuing an invalid duplicate load.
 - Every harness role is installed as an explicit OpenCode agent; only implementer and repair receive mutation tools, and nested delegation is disabled.
 - Every structured prompt includes the exact generated JSON Schema. Triage rejects a confirmed non-testable finding without a non-empty regression-test exemption while still inside inference retry handling.
-- Production profiles use `--load-mode none`. The previous boot journal recorded a kernel `Bad page map in process llama-server` while unmapping the Qwen coder GGUF, followed by an invalid swap entry. Router state at that instant showed only Devstral loaded, so the freeze was not simultaneous model residency.
+- Production profiles use `--load-mode none`. The previous boot journal recorded a kernel `Bad page map in process llama-server` while unmapping the Qwen coder GGUF, followed by an invalid swap entry. Router state at that instant showed only the next model loaded, so the freeze was not simultaneous model residency.
 - OpenCode roles have finite step limits, doom-loop denial, and no `todowrite`. An interrupted pre-fix auditor reached more than 280 tool-loop steps; the successful final auditor returned in about 62 seconds under the bounded configuration. The final log audit also found unnecessary `webfetch` and skill-discovery attempts, so both tools are now explicitly disabled for every local role.
 - An already accepted OpenCode request must be explicitly aborted when a client is force-stopped; unloading its model alone does not cancel the server-side session. The interrupted validation sessions were explicitly aborted and their models unloaded before subsequent runs.
 

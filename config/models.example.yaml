@@ -13,7 +13,7 @@ models:
     reasoning: auto
     reasoningBudget: 8192
     reasoningPreserve: true
-    roles: [supervisor, planner, testArchitect, requirementsReviewer, validator, auditor]
+    roles: [supervisor, planner, testArchitect, repositoryReviewer, requirementsReviewer, validator, adversarialVerifier, auditor]
   qwen3-coder-impl:
     hfRef: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL
     quantization: UD-Q4_K_XL
@@ -22,15 +22,6 @@ models:
     parallel: 1
     reasoning: off
     roles: [implementer, repair]
-  devstral-repo:
-    hfRef: bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_S
-    quantization: Q4_K_S
-    approximateArtifactGiB: 13.55
-    contextSize: 65536
-    parallel: 1
-    reasoning: off
-    roles: [repositoryReviewer, adversarialVerifier]
-
 commonServerArgs:
   host: 127.0.0.1
   port: 8080
