@@ -16,6 +16,7 @@ import { watch } from "node:fs";
 import { generateRunReport } from "./report/run-report.js";
 import { discoverHarnessConfig, resolveWorkspace } from "./workspace.js";
 import { continueConversation, readConversation } from "./conversation/service.js";
+import { runGitRegressionAdapter } from "./verification/git-regression-adapter.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -31,6 +32,8 @@ async function conversationalTurn(repository: string, prompt: string, config: Aw
   let activeRunId: string | undefined; let interrupts = 0; const controller = new AbortController(); const signal = () => { if (!activeRunId) return; interrupts++; if (interrupts === 1) { void requestPause(repository, activeRunId).then((file) => { process.stderr.write(`Graceful pause requested: ${file}\n`); controller.abort(new Error("cooperative pause requested")); }).catch((error) => process.stderr.write(`Pause request failed: ${error instanceof Error ? error.message : String(error)}\n`)); return; } process.stderr.write("Second interrupt received; exiting immediately with persisted state preserved.\n"); process.exit(130); }; process.on("SIGINT", signal);
   return continueConversation({ workspace: repository, prompt, config, conversationId, newConversation, definitionOfDone, signal: controller.signal, onRunCreated(runId) { activeRunId = runId; } }).finally(() => process.off("SIGINT", signal));
 }
+
+program.command("regression-proof").description("Run a configured test against repaired and defective checkpoints").argument("<command>").argument("[args...]").action(async (command, args) => { process.stdout.write(`${JSON.stringify(await runGitRegressionAdapter(process.cwd(), command, args))}\n`); });
 
 program.command("doctor").description("Validate local runtime compatibility").option("-c, --config <file>", "configuration file").option("--json", "emit JSON").action(async (options) => {
   const repository = await workspace(); const report = await runDoctor(await loadConfig(await configuration(repository, options.config)));

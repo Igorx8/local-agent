@@ -18,3 +18,5 @@ Raw command output is retained in the run artifacts. Invalid JSON, wrong provena
 The core workflow now traverses `ADVERSARIAL_TESTING -> PROPERTY_TESTING -> MUTATION_TESTING -> FLAKY_ANALYSIS -> FINAL_AUDIT`. Results are stored in their corresponding artifact directories. Append-only historical JSONL records include first-pass gate status, final status, repairs, finding counts, provenance distribution, mutation score, flaky incidents, and duration.
 
 An unconfigured optional challenge adapter is recorded as `skipped`. An unconfigured regression adapter is stricter: if a confirmed finding is testable, the run stops safely because AC-031 cannot be proven.
+
+The bundled `harness regression-proof <command> [args...]` adapter materializes the defective and repaired commits in isolated temporary directories, overlays only test files changed by the repair onto the defective snapshot, and runs the configured executable plus argv against both states. It emits evidence only when the overlaid test fails before and the same configured command passes after; a test that was already green before the repair is rejected. Model-generated reproduction strings are never executed.

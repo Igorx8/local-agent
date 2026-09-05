@@ -1580,6 +1580,8 @@ Suggested exit codes:
 - classify each scenario as passed, failed, or blocked; never infer runtime success from unit tests;
 - publish a reproducible operational-validation report and stop after Milestone 11 for review.
 
+The default local regression adapter is `harness regression-proof <command> [args...]`. It must materialize the exact defective and repaired checkpoints, overlay repair-changed tests onto the defective snapshot, execute only the configured command argv, require non-zero before and zero after, and reject model-authored reproduction text as executable input.
+
 Performance findings captured during Milestone 11 must feed a later optimization milestone. In particular, reports must distinguish model load/unload time, inference time, tool-step count, structured-output retries, deterministic gates, and verification time. Any future risk-proportional policy must retain deterministic gates and independent review while calibrating per-role step budgets; it must not claim improvement from merely skipping evidence-producing stages.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.

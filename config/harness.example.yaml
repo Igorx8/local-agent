@@ -42,7 +42,8 @@ verification:
   flakyRepetitions: 3
   # Adapters execute only configured executable + argv commands. Each command
   # should emit the documented normalized JSON contract on stdout.
-  commands: {}
+  commands:
+    regression: { command: harness, args: [regression-proof, npm, test], required: true, timeoutMs: 600000 }
 context:
   warningThreshold: 0.70
   prepareHandoffThreshold: 0.78
