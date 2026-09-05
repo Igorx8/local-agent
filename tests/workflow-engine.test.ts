@@ -73,6 +73,13 @@ describe("WorkflowEngine", () => {
     expect(result.stage).toBe("SUCCEEDED"); expect(result.counters.repairIterations).toBe(1); expect(fixture.checkpoints).toEqual(["implementation", "repair"]);
     expect(fixture.roles.invocations.filter((item) => item.role === "repositoryReviewer")).toHaveLength(2);
   });
+  it("retries schema-valid triage that omits a merged finding", async () => {
+    const finding = { id: "REV-1", severity: "low", acceptanceCriterion: "AC-X", problem: "minor", evidence: "fixture", reproduction: "inspect", expectedBehavior: "clear", actualBehavior: "unclear", suggestedFix: "clarify", confidence: "high" };
+    const outputs = baseOutputs(); outputs.repositoryReviewer = [{ findings: [finding] }]; outputs.validator = [{ findings: [] }, { findings: [{ findingId: "REV-1", classification: "invalid", evidence: "not reproducible", rootCause: "none", testable: false }] }];
+    const fixture = await setup(outputs); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
+    expect(result.stage).toBe("SUCCEEDED"); expect(result.counters.inferenceRetries).toBe(1); expect(fixture.roles.invocations.filter((item) => item.role === "validator")).toHaveLength(2);
+    expect(fixture.roles.invocations.find((item) => item.role === "validator")?.prompt).toContain('"findingIds"');
+  });
   it("escalates when a repaired finding reappears", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };
     const outputs = baseOutputs(); outputs.repositoryReviewer = [{ findings: [finding] }, { findings: [finding] }]; outputs.requirementsReviewer = [{ findings: [] }, { findings: [] }];
