@@ -19,7 +19,10 @@ export async function runGitRegressionAdapter(repository: string, command: strin
   try {
     for (const [commit, destination] of [[context.defectiveCheckpoint, defective], [context.repairedCheckpoint, repaired]] as const) { await mkdir(destination); const archive = path.join(root, `${path.basename(destination)}.tar`); await required("git", ["archive", "--format=tar", "--output", archive, commit], repository); await required("tar", ["-xf", archive, "-C", destination], repository); }
     const changed = (await required("git", ["diff", "--name-only", context.defectiveCheckpoint, context.repairedCheckpoint, "--"], repository)).split("\n").filter(Boolean); const tests = changed.filter(isTest); if (!tests.length) throw new Error("repair contains no changed regression test");
-    for (const file of tests) { const source = path.join(repaired, file); const target = path.join(defective, file); await mkdir(path.dirname(target), { recursive: true }); await cp(source, target); }
+    // For a production repair, overlay its new regression tests onto the defective
+    // tree so the same test proves fail-before/pass-after. For a test-only repair,
+    // preserve the defective test verbatim: replacing it would erase the defect.
+    if (changed.some((file) => !isTest(file))) for (const file of tests) { const source = path.join(repaired, file); const target = path.join(defective, file); await mkdir(path.dirname(target), { recursive: true }); await cp(source, target); }
     const before = await execute(command, args, defective); const after = await execute(command, args, repaired); if (before.code === 0) throw new Error("regression test did not fail against the defective checkpoint"); if (after.code !== 0) throw new Error("regression test did not pass against the repaired checkpoint");
     const testPath = tests.join(", "); return { proofs: context.findings.map((finding) => ({ findingId: finding.id, testPath, defectiveCheckpoint: context.defectiveCheckpoint, repairedCheckpoint: context.repairedCheckpoint, failBefore: { exitCode: before.code, expectedReasonMatched: true, evidence: before.output || `command exited ${before.code}` }, passAfter: { exitCode: 0, evidence: after.output || "configured regression command passed" } })) };
   } finally { await rm(root, { recursive: true, force: true }); }
