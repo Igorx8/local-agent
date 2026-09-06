@@ -62,6 +62,8 @@ describe("WorkflowEngine", () => {
     const reviews = fixture.roles.invocations.filter((item) => ["repositoryReviewer", "requirementsReviewer"].includes(item.role));
     expect(new Set(reviews.map((item) => item.role)).size).toBe(2); expect(reviews.every((item) => item.freshSession)).toBe(true);
     expect(reviews.find((item) => item.role === "repositoryReviewer")?.prompt).toContain("Use at most six tool calls");
+    expect(reviews.find((item) => item.role === "repositoryReviewer")?.prompt).toContain("omit positive confirmations");
+    expect(fixture.roles.invocations.find((item) => item.role === "validator")?.prompt).toContain("actually executed successful gate");
     const adversarial = fixture.roles.invocations.filter((item) => item.role === "adversarialVerifier"); expect(adversarial).toHaveLength(1); expect(adversarial[0]?.prompt).toContain("copy only exact criterion IDs");
     expect(fixture.roles.invocations.find((item) => item.role === "auditor")?.prompt).toContain("Use at most six tool calls");
   });
