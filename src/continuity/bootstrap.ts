@@ -10,9 +10,16 @@ export function validateBootstrap(actual: BootstrapVerification, expected: Boots
   if (actual.objective !== expected.objective || actual.nextAction !== expected.nextAction) throw new Error("bootstrap semantic restatement mismatch");
   for (const [name, left, right] of [["pending acceptance criteria", actual.pendingAcceptanceCriteria, expected.pendingAcceptanceCriteria], ["allowed files", actual.allowedFiles, expected.allowedFiles], ["prohibited actions", actual.prohibitedActions, expected.prohibitedActions]] as const) if (!exactArrays(left, right)) throw new Error(`bootstrap ${name} mismatch`);
 }
-function extractJson(text: string): unknown { const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]; return JSON.parse((fenced ?? text).trim()); }
-export async function bootstrapSession(sessions: OpencodeSessions, input: { previousSessionId: string; role: string; model: ModelSelection; handoff: string; expected: BootstrapExpected }): Promise<{ sessionId: string; verification: BootstrapVerification }> {
-  const session = await sessions.create(`handoff continuation: ${input.role}`, input.previousSessionId);
-  await sessions.prompt({ sessionID: session.id, agent: input.role, model: input.model, text: `${input.handoff}\n\nVerify repository state read-only and restate the semantic continuation. Return JSON only. Do not mutate files or run mutating tools.`, tools: { write: false, edit: false } });
-  const messages = await sessions.messages(session.id); const response = [...messages].reverse().find((message) => message.info.role === "assistant"); const raw = response?.parts.filter((part) => part.type === "text").map((part) => part.text).join("") ?? ""; const verification = bootstrapVerificationSchema.parse(extractJson(raw)); validateBootstrap(verification, input.expected); return { sessionId: session.id, verification };
+function extractJson(text: string): unknown { const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]; const candidate = (fenced ?? text).trim(); try { return JSON.parse(candidate); } catch { const start = candidate.indexOf("{"); const end = candidate.lastIndexOf("}"); if (start < 0 || end <= start) throw new Error("bootstrap response contains no JSON object"); return JSON.parse(candidate.slice(start, end + 1)); } }
+export async function bootstrapSession(sessions: OpencodeSessions, input: { previousSessionId: string; role: string; model: ModelSelection; handoff: string; expected: BootstrapExpected; retries?: number }): Promise<{ sessionId: string; verification: BootstrapVerification }> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= (input.retries ?? 0); attempt++) {
+    const session = await sessions.create(`handoff continuation: ${input.role}`, input.previousSessionId);
+    try {
+      const contract = { repository: input.expected.repository, objective: input.expected.objective, completed: [] as string[], pendingAcceptanceCriteria: input.expected.pendingAcceptanceCriteria, allowedFiles: input.expected.allowedFiles, prohibitedActions: input.expected.prohibitedActions, nextAction: input.expected.nextAction };
+      await sessions.prompt({ sessionID: session.id, agent: input.role, model: input.model, text: `${input.handoff}\n\nVerify repository state read-only. Return JSON only with exactly these keys and copy every supplied deterministic value exactly; completed may contain concise verified facts:\n${JSON.stringify(contract)}`, tools: { write: false, edit: false, bash: false } });
+      const messages = await sessions.messages(session.id); const response = [...messages].reverse().find((message) => message.info.role === "assistant"); const raw = response?.parts.filter((part) => part.type === "text").map((part) => part.text).join("") ?? ""; const verification = bootstrapVerificationSchema.parse(extractJson(raw)); validateBootstrap(verification, input.expected); return { sessionId: session.id, verification };
+    } catch (error) { lastError = error; await sessions.abort(session.id).catch(() => false); }
+  }
+  throw lastError;
 }

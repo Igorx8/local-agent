@@ -4,7 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { decideContext, estimateTokensFromBytes, resolveTokenObservation, TurnBudgetHistory } from "../src/context/budget.js";
 import { applyHandoffAbstraction, renderHandoff, validateHandoff, writeHandoff, type HandoffData } from "../src/continuity/handoff.js";
-import { validateBootstrap } from "../src/continuity/bootstrap.js";
+import { bootstrapSession, validateBootstrap } from "../src/continuity/bootstrap.js";
+import type { OpencodeSessions } from "../src/opencode/sessions.js";
 import { emergencyCompactionInstruction, opencodeCompactionPlugin } from "../src/continuity/compaction.js";
 import { requestManualHandoff } from "../src/workflow/run.js";
 import { StateStore } from "../src/state/store.js";
@@ -29,6 +30,19 @@ describe("context continuity", () => {
   it("rejects semantic or repository mismatch during bootstrap", () => {
     const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: ["AC-X"], allowedFiles: ["src"], prohibitedActions: ["merge"], nextAction: "test" };
     const actual = { ...expected, completed: ["plan"] }; expect(() => validateBootstrap(actual, expected)).not.toThrow(); expect(() => validateBootstrap({ ...actual, nextAction: "guess" }, expected)).toThrow(/semantic/);
+  });
+
+  it("retries an invalid bootstrap in a fresh session and aborts the rejected session", async () => {
+    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: ["AC-X"], allowedFiles: ["src"], prohibitedActions: ["merge"], nextAction: "test" }; let created = 0; const aborted: string[] = [];
+    const sessions = { async create() { return { id: `session-${++created}` }; }, async prompt() {}, async messages(id: string) { const value = id === "session-1" ? {} : { ...expected, completed: ["verified"] }; return [{ info: { role: "assistant" }, parts: [{ type: "text", text: JSON.stringify(value) }] }]; }, async abort(id: string) { aborted.push(id); return true; } } as unknown as OpencodeSessions;
+    const result = await bootstrapSession(sessions, { previousSessionId: "old", role: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, handoff: "handoff", expected, retries: 1 });
+    expect(result.sessionId).toBe("session-2"); expect(aborted).toEqual(["session-1"]);
+  });
+
+  it("accepts a validated bootstrap JSON object wrapped in explanatory text", async () => {
+    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: [], allowedFiles: [], prohibitedActions: ["merge"], nextAction: "test" }; const value = { ...expected, completed: ["verified"] };
+    const sessions = { async create() { return { id: "session-1" }; }, async prompt() {}, async messages() { return [{ info: { role: "assistant" }, parts: [{ type: "text", text: `verification follows\n${JSON.stringify(value)}\ncomplete` }] }]; }, async abort() { return true; } } as unknown as OpencodeSessions;
+    await expect(bootstrapSession(sessions, { previousSessionId: "old", role: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, handoff: "handoff", expected })).resolves.toMatchObject({ sessionId: "session-1", verification: value });
   });
 
   it("preserves mandatory emergency-compaction fields", () => {

@@ -6,4 +6,6 @@ coverage/
 config/models.local.yaml
 config/models.local.ini
 config/opencode.local.json
+config/operational-validation.local.json
+config/harness.handoff.local.yaml
 *.log
