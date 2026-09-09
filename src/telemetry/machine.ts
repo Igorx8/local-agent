@@ -1,14 +1,23 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const executeFile = promisify(execFile);
-export interface MachineMetrics { gpu?: { utilizationPercent: number; vramUsedMiB: number; vramTotalMiB: number; temperatureC: number; powerW: number }; ram: { usedMiB: number; totalMiB: number }; swap: { usedMiB: number; totalMiB: number }; llamaPid?: number; modelProcessCount?: number; }
+export interface MachineMetrics { gpu?: { utilizationPercent: number; vramUsedMiB: number; vramTotalMiB: number; temperatureC: number; powerW: number }; ram: { usedMiB: number; totalMiB: number }; swap: { usedMiB: number; totalMiB: number }; modelSwapMiB?: number; llamaPid?: number; modelProcessCount?: number; }
 
 function memoryValue(text: string, key: string): number { return Number(text.match(new RegExp(`^${key}:\\s+(\\d+)`, "m"))?.[1] ?? 0) / 1024; }
+async function llamaSwapMiB(): Promise<number> {
+  try {
+    const entries = await readdir("/proc", { withFileTypes: true }); let total = 0;
+    await Promise.all(entries.filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name)).map(async (entry) => {
+      try { if ((await readFile(`/proc/${entry.name}/comm`, "utf8")).trim() === "llama-server") total += memoryValue(await readFile(`/proc/${entry.name}/status`, "utf8"), "VmSwap"); } catch { /* Process exited while sampled. */ }
+    }));
+    return total;
+  } catch { return 0; }
+}
 export async function collectMachineMetrics(llamaPid?: number): Promise<MachineMetrics> {
   const memory = await readFile("/proc/meminfo", "utf8"); const total = memoryValue(memory, "MemTotal"); const available = memoryValue(memory, "MemAvailable"); const swapTotal = memoryValue(memory, "SwapTotal"); const swapFree = memoryValue(memory, "SwapFree");
-  const result: MachineMetrics = { ram: { usedMiB: total - available, totalMiB: total }, swap: { usedMiB: swapTotal - swapFree, totalMiB: swapTotal }, llamaPid };
+  const result: MachineMetrics = { ram: { usedMiB: total - available, totalMiB: total }, swap: { usedMiB: swapTotal - swapFree, totalMiB: swapTotal }, modelSwapMiB: await llamaSwapMiB(), llamaPid };
   const [gpuQuery, processQuery] = await Promise.allSettled([
     executeFile("nvidia-smi", ["--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw", "--format=csv,noheader,nounits"], { timeout: 2000, killSignal: "SIGKILL" }),
     executeFile("nvidia-smi", ["--query-compute-apps=process_name", "--format=csv,noheader,nounits"], { timeout: 2000, killSignal: "SIGKILL" })

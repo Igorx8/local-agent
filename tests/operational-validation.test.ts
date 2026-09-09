@@ -9,10 +9,10 @@ describe("operational validation", () => {
     expect(parsed.scenarios[0]).toMatchObject({ command: "harness-validation", args: ["/repo"], maximumModelProcesses: 1 });
   });
 
-  it("fails on overlap or excessive swap and distinguishes blocked prerequisites", () => {
-    expect(classifyOperationalScenario({ exitCode: 0, signal: null, timedOut: false, maximumModelProcesses: 2, swapGrowthMiB: 0 }, limits)).toMatchObject({ status: "failed", reason: expect.stringContaining("simultaneous") });
-    expect(classifyOperationalScenario({ exitCode: 0, signal: null, timedOut: false, maximumModelProcesses: 1, swapGrowthMiB: 600 }, limits)).toMatchObject({ status: "failed", reason: expect.stringContaining("swap") });
-    expect(classifyOperationalScenario({ exitCode: 77, signal: null, timedOut: false, maximumModelProcesses: 0, swapGrowthMiB: 0 }, limits)).toMatchObject({ status: "blocked" });
+  it("fails on overlap or attributable model swap and distinguishes blocked prerequisites", () => {
+    expect(classifyOperationalScenario({ exitCode: 0, signal: null, timedOut: false, maximumModelProcesses: 2, modelSwapGrowthMiB: 0 }, limits)).toMatchObject({ status: "failed", reason: expect.stringContaining("simultaneous") });
+    expect(classifyOperationalScenario({ exitCode: 0, signal: null, timedOut: false, maximumModelProcesses: 1, modelSwapGrowthMiB: 600 }, limits)).toMatchObject({ status: "failed", reason: expect.stringContaining("model swap") });
+    expect(classifyOperationalScenario({ exitCode: 77, signal: null, timedOut: false, maximumModelProcesses: 0, modelSwapGrowthMiB: 0 }, limits)).toMatchObject({ status: "blocked" });
   });
 
   it("derives per-stage durations for future pipeline optimization", () => {
@@ -21,6 +21,6 @@ describe("operational validation", () => {
 
   it("does not miss an immediately exiting child process", async () => {
     const result = await executeOperationalScenario(operationalManifestSchema.parse({ schemaVersion: 1, output: "/tmp/unused.json", scenarios: [{ id: "multi_turn", command: "/usr/bin/true", cwd: "/tmp" }] }).scenarios[0]!, 500);
-    expect(result).toMatchObject({ status: "passed", exitCode: 0, timedOut: false });
+    expect(result).toMatchObject({ status: "passed", exitCode: 0, timedOut: false, modelSwapGrowthMiB: 0 });
   }, 10_000);
 });
