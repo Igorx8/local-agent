@@ -32,17 +32,33 @@ describe("context continuity", () => {
     const actual = { ...expected, completed: ["plan"] }; expect(() => validateBootstrap(actual, expected)).not.toThrow(); expect(() => validateBootstrap({ ...actual, nextAction: "guess" }, expected)).toThrow(/semantic/);
   });
 
+  it("accepts reordered deterministic sets and rejects omitted, invented, or altered values", () => {
+    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: ["AC-1", "AC-2"], allowedFiles: ["src", "test"], prohibitedActions: ["merge", "push"], nextAction: "test" };
+    const actual = { ...expected, completed: [], pendingAcceptanceCriteria: ["AC-2", "AC-1"], allowedFiles: ["test", "src"], prohibitedActions: ["push", "merge"] };
+    expect(() => validateBootstrap(actual, expected)).not.toThrow();
+    expect(() => validateBootstrap({ ...actual, pendingAcceptanceCriteria: ["AC-1"] }, expected)).toThrow(/pending acceptance/);
+    expect(() => validateBootstrap({ ...actual, pendingAcceptanceCriteria: ["AC-1", "AC-2", "AC-X"] }, expected)).toThrow(/pending acceptance/);
+    expect(() => validateBootstrap({ ...actual, repository: { ...actual.repository, commit: "changed" } }, expected)).toThrow(/repository/);
+  });
+
   it("retries an invalid bootstrap in a fresh session and aborts the rejected session", async () => {
-    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: ["AC-X"], allowedFiles: ["src"], prohibitedActions: ["merge"], nextAction: "test" }; let created = 0; const aborted: string[] = [];
-    const sessions = { async create() { return { id: `session-${++created}` }; }, async prompt() {}, async messages(id: string) { const value = id === "session-1" ? {} : { ...expected, completed: ["verified"] }; return [{ info: { role: "assistant" }, parts: [{ type: "text", text: JSON.stringify(value) }] }]; }, async abort(id: string) { aborted.push(id); return true; } } as unknown as OpencodeSessions;
+    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: ["AC-X"], allowedFiles: ["src"], prohibitedActions: ["merge"], nextAction: "test" }; let created = 0; const aborted: string[] = []; const prompts: string[] = [];
+    const sessions = { async create() { return { id: `session-${++created}` }; }, async prompt(request: { text: string }) { prompts.push(request.text); }, async messages(id: string) { const value = id === "session-1" ? {} : { continuity: "confirmed", objectiveUnderstood: true, nextActionUnderstood: true, completed: ["verified"], contradictions: [] }; return [{ info: { role: "assistant" }, parts: [{ type: "text", text: JSON.stringify(value) }] }]; }, async abort(id: string) { aborted.push(id); return true; } } as unknown as OpencodeSessions;
     const result = await bootstrapSession(sessions, { previousSessionId: "old", role: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, handoff: "handoff", expected, retries: 1 });
     expect(result.sessionId).toBe("session-2"); expect(aborted).toEqual(["session-1"]);
+    expect(prompts[0]).not.toContain("/repo"); expect(prompts[0]).not.toContain("AC-X"); expect(prompts[0]).toContain("semantic continuity only");
   });
 
   it("accepts a validated bootstrap JSON object wrapped in explanatory text", async () => {
-    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: [], allowedFiles: [], prohibitedActions: ["merge"], nextAction: "test" }; const value = { ...expected, completed: ["verified"] };
+    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: [], allowedFiles: [], prohibitedActions: ["merge"], nextAction: "test" }; const value = { continuity: "confirmed", objectiveUnderstood: true, nextActionUnderstood: true, completed: ["verified"], contradictions: [] };
     const sessions = { async create() { return { id: "session-1" }; }, async prompt() {}, async messages() { return [{ info: { role: "assistant" }, parts: [{ type: "text", text: `verification follows\n${JSON.stringify(value)}\ncomplete` }] }]; }, async abort() { return true; } } as unknown as OpencodeSessions;
-    await expect(bootstrapSession(sessions, { previousSessionId: "old", role: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, handoff: "handoff", expected })).resolves.toMatchObject({ sessionId: "session-1", verification: value });
+    await expect(bootstrapSession(sessions, { previousSessionId: "old", role: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, handoff: "handoff", expected })).resolves.toMatchObject({ sessionId: "session-1", verification: { ...expected, completed: ["verified"] } });
+  });
+
+  it("fails closed when semantic bootstrap reports a contradiction", async () => {
+    const expected = { repository: { path: "/repo", branch: "agent/run", commit: "abc", dirty: false }, objective: "task", pendingAcceptanceCriteria: [], allowedFiles: [], prohibitedActions: ["merge"], nextAction: "test" };
+    const sessions = { async create() { return { id: "session-1" }; }, async prompt() {}, async messages() { return [{ info: { role: "assistant" }, parts: [{ type: "text", text: JSON.stringify({ continuity: "confirmed", objectiveUnderstood: true, nextActionUnderstood: true, completed: [], contradictions: ["objective conflicts"] }) }] }]; }, async abort() { return true; } } as unknown as OpencodeSessions;
+    await expect(bootstrapSession(sessions, { previousSessionId: "old", role: "planner", model: { providerID: "llama.cpp", modelID: "qwen" }, handoff: "handoff", expected })).rejects.toThrow();
   });
 
   it("preserves mandatory emergency-compaction fields", () => {
