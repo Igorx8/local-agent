@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { assertColdStart, assertHandoff, assertMultiTurn, assertPauseResume, assertRunCounter } from "../src/operational/assertions.js";
+import { assertColdStart, assertEndurance, assertHandoff, assertMultiTurn, assertPauseResume, assertRunCounter } from "../src/operational/assertions.js";
 import { StateStore } from "../src/state/store.js";
 import type { RunState } from "../src/state/types.js";
 
@@ -35,5 +35,12 @@ describe("operational evidence assertions", () => {
     const root = await mkdtemp(path.join(tmpdir(), "pause-resume-")); const completed = state(root); await new StateStore(root).initialize(completed);
     await writeFile(path.join(root, "events.jsonl"), `${JSON.stringify({ schemaVersion: 1, at: new Date().toISOString(), type: "run.paused", message: "paused" })}\n`);
     expect(await assertPauseResume(root)).toMatchObject({ passed: true, failures: [] });
+  });
+
+  it("proves incremental endurance with unique runs and released models", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "endurance-assertion-")); const directory = path.join(root, ".agent-harness", "conversations", "conv-1"); await mkdir(directory, { recursive: true }); const now = new Date().toISOString(); const turns = [];
+    for (let sequence = 1; sequence <= 2; sequence++) { const run = path.join(root, `run-${sequence}`); await new StateStore(run).initialize({ ...state(run), runId: `run-${sequence}` }); turns.push({ sequence, promptSha256: String(sequence).repeat(64), promptPreview: `turn ${sequence}`, runId: `run-${sequence}`, status: "succeeded", baseCommit: sequence === 1 ? "base" : "one", finalCommit: sequence === 1 ? "one" : "two", artifactPath: run, startedAt: now, completedAt: now }); }
+    await writeFile(path.join(directory, "conversation.json"), JSON.stringify({ schemaVersion: 1, id: "conv-1", workspace: root, status: "active", createdAt: now, updatedAt: now, turns }));
+    expect(await assertEndurance(root, "conv-1", 2)).toMatchObject({ passed: true, failures: [], evidence: expect.arrayContaining([expect.stringContaining("run=run-2; model=stopped")]) });
   });
 });

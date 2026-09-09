@@ -47,9 +47,13 @@ export async function assertPauseResume(runDirectory: string): Promise<Operation
   return result(evidence, failures);
 }
 
-export async function assertEndurance(workspace: string, conversationId: string): Promise<OperationalAssertion> {
-  const conversationResult = await assertMultiTurn(workspace, conversationId, 5); const conversation = conversationStateSchema.parse(JSON.parse(await readFile(path.join(workspace, ".agent-harness", "conversations", conversationId, "conversation.json"), "utf8")));
-  for (const turn of conversation.turns) if (turn.artifactPath) { const state = await runState(turn.artifactPath); if (state.activeModel?.lifecycle !== "stopped") conversationResult.failures.push(`turn ${turn.sequence} retained an active model`); }
+export async function assertEndurance(workspace: string, conversationId: string, minimumTurns = 5): Promise<OperationalAssertion> {
+  const conversationResult = await assertMultiTurn(workspace, conversationId, minimumTurns); const conversation = conversationStateSchema.parse(JSON.parse(await readFile(path.join(workspace, ".agent-harness", "conversations", conversationId, "conversation.json"), "utf8"))); const runIds = new Set<string>();
+  for (const turn of conversation.turns) {
+    if (!turn.runId || !turn.artifactPath) { conversationResult.failures.push(`turn ${turn.sequence} has no auditable run`); continue; }
+    if (runIds.has(turn.runId)) conversationResult.failures.push(`turn ${turn.sequence} reused run ${turn.runId}`); runIds.add(turn.runId);
+    const state = await runState(turn.artifactPath); if (state.activeModel?.lifecycle !== "stopped") conversationResult.failures.push(`turn ${turn.sequence} retained an active model`); else conversationResult.evidence.push(`turn ${turn.sequence}: run=${turn.runId}; model=stopped; retries=${state.counters.inferenceRetries}`);
+  }
   conversationResult.passed = !conversationResult.blocked && conversationResult.failures.length === 0; return conversationResult;
 }
 
