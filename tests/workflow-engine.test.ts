@@ -65,7 +65,7 @@ describe("WorkflowEngine", () => {
     expect(reviews.find((item) => item.role === "repositoryReviewer")?.prompt).toContain("omit positive confirmations");
     expect(fixture.roles.invocations.find((item) => item.role === "validator")?.prompt).toContain("actually executed successful gate");
     const adversarial = fixture.roles.invocations.filter((item) => item.role === "adversarialVerifier"); expect(adversarial).toHaveLength(1); expect(adversarial[0]?.prompt).toContain("copy only exact criterion IDs");
-    expect(fixture.roles.invocations.find((item) => item.role === "auditor")?.prompt).toContain("Use at most six tool calls");
+    expect(fixture.roles.invocations.find((item) => item.role === "auditor")?.prompt).toContain("Use at most two tool calls");
   });
   it("validates a high finding, performs one focused repair, and re-reviews", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", file: "src/x.ts", lineStart: 1, problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };
@@ -91,7 +91,7 @@ describe("WorkflowEngine", () => {
   });
   it("requires final audit problems to remain inside the JSON contract", async () => {
     const fixture = await setup(baseOutputs()); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
-    expect(result.status).toBe("succeeded"); expect(fixture.roles.invocations.find((item) => item.role === "auditor")?.prompt).toContain("encode it in findings and decision");
+    const prompt = fixture.roles.invocations.find((item) => item.role === "auditor")?.prompt ?? ""; expect(result.status).toBe("succeeded"); expect(prompt).toContain("encode it in findings and decision"); expect(prompt).toContain("Do not attempt Git history discovery"); expect(prompt).toContain('"gates"'); expect(prompt).toContain('"independentReview"');
   });
   it("escalates when a repaired finding reappears", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };
