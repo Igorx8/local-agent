@@ -1,9 +1,9 @@
-import { assertColdStart, assertEndurance, assertMultiTurn, assertPausedRun, assertPauseResume, assertRunCounter } from "../dist/src/operational/assertions.js";
+import { assertColdStart, assertEndurance, assertHandoff, assertMultiTurn, assertPausedRun, assertPauseResume, assertRunCounter } from "../dist/src/operational/assertions.js";
 
 const [kind, target, extra] = process.argv.slice(2); let assertion;
 if (kind === "multi_turn") assertion = await assertMultiTurn(target, extra);
 else if (kind === "repair") assertion = await assertRunCounter(target, "repairIterations", 1);
-else if (kind === "handoff") assertion = await assertRunCounter(target, "contextHandoffs", 2);
+else if (kind === "handoff") assertion = await assertHandoff(target, 2);
 else if (kind === "pause_resume") assertion = await assertPauseResume(target);
 else if (kind === "forced_interrupt") assertion = await assertPausedRun(target);
 else if (kind === "endurance") assertion = await assertEndurance(target, extra);

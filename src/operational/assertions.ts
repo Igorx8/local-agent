@@ -23,6 +23,17 @@ export async function assertRunCounter(runDirectory: string, counter: "repairIte
   return result(evidence, failures);
 }
 
+export async function assertHandoff(runDirectory: string, minimum = 2): Promise<OperationalAssertion> {
+  const state = await runState(runDirectory); const events = await readEvents(runDirectory, Number.MAX_SAFE_INTEGER); const evidence = [`status=${state.status}`, `contextHandoffs=${state.counters.contextHandoffs}`, `model=${state.activeModel?.alias ?? "none"}:${state.activeModel?.lifecycle ?? "none"}`]; const failures: string[] = [];
+  if (state.status !== "succeeded") failures.push(`run status is ${state.status}`); if (state.activeModel?.lifecycle !== "stopped") failures.push("final model is not stopped"); if (state.counters.contextHandoffs < minimum) failures.push(`contextHandoffs must be at least ${minimum}`);
+  if (state.handoffs.length !== state.counters.contextHandoffs) failures.push("persisted handoffs do not match the counter");
+  const newSessions = new Set<string>();
+  for (const [index, handoff] of state.handoffs.entries()) { if (handoff.sequence !== index + 1) failures.push(`handoff sequence ${handoff.sequence} is not contiguous`); if (handoff.previousSessionId === handoff.newSessionId || newSessions.has(handoff.newSessionId)) failures.push(`handoff ${handoff.sequence} did not create a unique fresh session`); newSessions.add(handoff.newSessionId); try { await access(handoff.path); } catch { failures.push(`handoff ${handoff.sequence} artifact is missing`); } }
+  const restarts = events.filter((event) => event.type === "session.restart"); if (restarts.length < state.handoffs.length) failures.push("a persisted handoff has no session.restart evidence"); else evidence.push(`sessionRestarts=${restarts.length}`);
+  const checkpointKeys = state.checkpoints.map((checkpoint) => `${checkpoint.kind}:${checkpoint.iteration}`); if (new Set(checkpointKeys).size !== checkpointKeys.length) failures.push("duplicate mutation checkpoint detected"); else evidence.push(`uniqueCheckpoints=${checkpointKeys.length}`);
+  return result(evidence, failures);
+}
+
 export async function assertPausedRun(runDirectory: string): Promise<OperationalAssertion> {
   const state = await runState(runDirectory); const events = await readEvents(runDirectory, Number.MAX_SAFE_INTEGER); const evidence = [`status=${state.status}`, `stage=${state.stage}`, `model=${state.activeModel?.lifecycle ?? "none"}`]; const failures: string[] = [];
   if (state.status !== "paused" || state.stage !== "PAUSED") failures.push("run is not paused"); if (!events.some((event) => event.type === "run.paused")) failures.push("run.paused event is missing"); if (state.activeModel?.lifecycle !== "stopped") failures.push("model was not released after pause");

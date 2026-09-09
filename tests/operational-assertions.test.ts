@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { assertColdStart, assertMultiTurn, assertPauseResume, assertRunCounter } from "../src/operational/assertions.js";
+import { assertColdStart, assertHandoff, assertMultiTurn, assertPauseResume, assertRunCounter } from "../src/operational/assertions.js";
 import { StateStore } from "../src/state/store.js";
 import type { RunState } from "../src/state/types.js";
 
@@ -21,6 +21,14 @@ describe("operational evidence assertions", () => {
 
   it("keeps cold-start evidence blocked until boot identity changes", async () => {
     expect(await assertColdStart("/missing/cold-start-receipt.json")).toMatchObject({ passed: false, blocked: true });
+  });
+
+  it("proves contiguous fresh handoffs and unique mutation checkpoints", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "handoff-assertion-")); const current = state(root); const now = new Date().toISOString();
+    current.handoffs = [1, 2].map((sequence) => ({ sequence, role: "planner", previousSessionId: `old-${sequence}`, newSessionId: `new-${sequence}`, path: path.join(root, `handoff-${sequence}.md`), reason: "threshold", createdAt: now })); current.checkpoints = [{ kind: "implementation", iteration: 0, commit: "abc", treeHash: "tree", changedFiles: ["README.md"], createdAt: now }]; await new StateStore(root).initialize(current);
+    for (const handoff of current.handoffs) await writeFile(handoff.path, "handoff\n"); await writeFile(path.join(root, "events.jsonl"), current.handoffs.map((handoff) => JSON.stringify({ schemaVersion: 1, at: now, type: "session.restart", message: "restarted", data: { sequence: handoff.sequence } })).join("\n") + "\n");
+    expect(await assertHandoff(root)).toMatchObject({ passed: true, failures: [], evidence: expect.arrayContaining(["sessionRestarts=2", "uniqueCheckpoints=1"]) });
+    current.checkpoints.push({ ...current.checkpoints[0]! }); await writeFile(path.join(root, "state.json"), JSON.stringify(current)); expect(await assertHandoff(root)).toMatchObject({ passed: false, failures: expect.arrayContaining(["duplicate mutation checkpoint detected"]) });
   });
 
   it("proves a paused run later completed and released its model", async () => {
