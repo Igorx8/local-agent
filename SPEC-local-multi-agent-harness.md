@@ -1455,6 +1455,8 @@ Suggested exit codes:
 - AC-073: Reference parsing supports multiple files, quoted paths containing spaces, and an explicit way to escape a literal `@`; it never expands model-authored text, invokes a shell, or treats referenced contents as executable commands.
 - AC-074: Missing or rejected references stop before model inference and list every invalid target without leaking contents from allowed or denied files.
 - AC-075: IDE documentation and completion-friendly syntax cover current-workspace use, multiple references, spaces, escaping, limits, and security behavior.
+- AC-076: `harness run`, `continue`, and `resume` print the `runId` and isolated worktree path immediately, then emit concise stage, role/model, checkpoint, gate, retry, handoff, pause, and terminal-status progress without requiring a second terminal.
+- AC-077: A `--follow`/progress mode refreshes human-readable status without exposing prompts, secrets, or unbounded model logs; structured JSON/JSONL output remains available for IDE integrations and scripts.
 
 ## 23. Test plan
 
@@ -1610,7 +1612,8 @@ Performance findings captured during Milestone 11 must feed a later optimization
 - inject referenced text with deterministic boundaries and provenance rather than allowing implicit shell expansion;
 - persist path, byte size, SHA-256, and bounded conversation-memory provenance;
 - support multiple references, quoted paths with spaces, and escaped literal `@` syntax;
-- add unit, integration, security, conversation-memory, and CLI tests for AC-069–AC-075;
+- emit immediate run identity and bounded live progress for long-running commands, with an explicit structured mode for IDE consumers;
+- add unit, integration, security, conversation-memory, progress-output, and CLI tests for AC-069–AC-077;
 - document Fish and IDE usage and stop after Milestone 12 for review.
 
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
