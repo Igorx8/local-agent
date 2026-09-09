@@ -62,3 +62,14 @@ Stage durations are recorded to support a later risk-proportional execution poli
 - Current deterministic baseline after these fixes: 31 test files, 94 tests, typecheck and build all pass.
 
 Remaining before Milestone 11 completion: repeat AC-064 against the hardened abstraction prompt; complete AC-063 with reviewer-discovered production repair and retained fail-before/pass-after proof; complete AC-065 pause-to-success; and run a fresh five-turn AC-068 endurance conversation. AC-062, AC-066, and AC-067 pass.
+
+## Short closure slices
+
+To keep a Codex usage-limit interruption from hiding the verdict, finish the remaining work as four independent slices. Every slice writes its operational report and runs its evidence assertion before another slice starts.
+
+1. **11A — repair (AC-063):** one seeded production defect; stop after reviewer discovery, validation, repair-model switch, regression proof, repeated gates, audit, and the `repair` assertion.
+2. **11B — handoff (AC-064):** one small run using the hardened abstraction/bootstrap contract; stop after at least two persisted handoffs, final success, and the `handoff` assertion. If it fails again, preserve the report as runtime-blocked evidence rather than looping.
+3. **11C — pause/resume (AC-065):** start one small run, send one cooperative interrupt, immediately assert paused/stopped state, resume the same run, then execute the `pause_resume` assertion.
+4. **11D — endurance (AC-068):** execute five individually monitored prompts. Persist one report after each prompt and run the ancestry/resource assertion incrementally; the fifth prompt only supplies the final endurance verdict.
+
+Completed slices do not rerun after a Codex session ends. The next session reads the reports and begins with the first missing or failed slice.

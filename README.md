@@ -3,6 +3,8 @@
 Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–10 are implemented, including persistent workspace conversations, audited isolated runs, and strict single-model GPU residency.
 Milestone 11 operational validation is documented in [docs/milestone-11-operational-validation.md](docs/milestone-11-operational-validation.md).
 
+Para executar o agente em outros projetos pela IDE, consulte [Usando o harness em outros repositórios](docs/using-in-other-repositories.md).
+
 ## Where it runs
 
 The harness source lives in this repository, but the installed command targets the Git workspace containing the current directory. It works from the repository root or any nested package in a monorepo. Each run creates an isolated `agent/<run-id>-<slug>` branch/worktree and stores auditable artifacts under `.agent-harness/runs/<run-id>/` in the target project. It never merges into the default branch.

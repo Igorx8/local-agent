@@ -1446,6 +1446,16 @@ Suggested exit codes:
 - AC-067: A forced client interruption explicitly cancels the accepted OpenCode server-side session and unloads its model; no residual session may resume inference or reload a model later.
 - AC-068: A bounded endurance run of at least five consecutive prompts finishes without simultaneous model processes, residual GPU allocation, swap growth attributable to leaked model mappings, or unbounded agent steps.
 
+### Explicit file references and IDE ergonomics
+
+- AC-069: `harness run`, `harness continue`, and `harness chat` recognize one or more `@relative/path` references and attach the exact referenced text to the current prompt with unambiguous path/content boundaries.
+- AC-070: File references resolve relative to the selected Git workspace, canonicalize symlinks, and fail closed when a target escapes the workspace, does not exist, is not a regular readable file, or matches configured denied/sensitive paths.
+- AC-071: Referenced files have deterministic per-file and aggregate byte/token limits; binary files and oversized input are rejected with actionable errors instead of being truncated silently.
+- AC-072: Every resolved reference records path, size, and SHA-256 in run artifacts, while conversation memory retains bounded provenance and does not duplicate unchanged file contents indefinitely.
+- AC-073: Reference parsing supports multiple files, quoted paths containing spaces, and an explicit way to escape a literal `@`; it never expands model-authored text, invokes a shell, or treats referenced contents as executable commands.
+- AC-074: Missing or rejected references stop before model inference and list every invalid target without leaking contents from allowed or denied files.
+- AC-075: IDE documentation and completion-friendly syntax cover current-workspace use, multiple references, spaces, escaping, limits, and security behavior.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1586,9 +1596,24 @@ Incremental update (2026-09-06): semantic triage retry hardening is implemented.
 
 Incremental update (2026-09-07): AC-066 passes with distinct persisted pre/post reboot boot IDs and successful Fish/IDE-terminal startup. AC-064 remains runtime-blocked after three fail-closed live attempts; deterministic handoff coverage passes, but malformed local-model abstraction/bootstrap responses prevented a successful two-handoff run. Bounded bootstrap retries, rejected-session aborts, wrapper-tolerant JSON extraction, mutation-tool denial, and exact abstraction/bootstrap shapes are now implemented. AC-063, AC-064, AC-065, and AC-068 remain open; AC-062, AC-066, and AC-067 pass.
 
-The default local regression adapter is `harness regression-proof <command> [args...]`. It must materialize the exact defective and repaired checkpoints, overlay repair-changed tests onto the defective snapshot, execute only the configured command argv, require non-zero before and zero after, and reject model-authored reproduction text as executable input.
+Close Milestone 11 through independently resumable validation slices. Each slice must write its report and assertion result before the next begins: `11A` AC-063 repair proof; `11B` AC-064 two-handoff continuity; `11C` AC-065 pause/resume; and `11D` AC-068 five-turn endurance. A stopped Codex session must be able to continue from the first incomplete slice by reading persisted artifacts. Do not combine all remaining scenarios into one foreground command or defer every verdict until the end.
+
+The default local regression adapter is `harness regression-proof <command> [args...]`. It must materialize the exact defective and repaired checkpoints, overlay repair-changed tests onto the defective snapshot for production repairs, preserve the original defective test for test-only repairs, execute only the configured command argv, require non-zero before and zero after, and reject model-authored reproduction text as executable input.
 
 Performance findings captured during Milestone 11 must feed a later optimization milestone. In particular, reports must distinguish model load/unload time, inference time, tool-step count, structured-output retries, deterministic gates, and verification time. Any future risk-proportional policy must retain deterministic gates and independent review while calibrating per-role step budgets; it must not claim improvement from merely skipping evidence-producing stages.
+
+### Milestone 12: explicit file references and IDE ergonomics
+
+- parse explicit `@relative/path` references before inference for CLI and interactive prompts;
+- resolve and canonicalize references strictly inside the selected Git workspace;
+- enforce denied-path, sensitive-file, regular-file, binary, per-file, aggregate, and token-budget checks;
+- inject referenced text with deterministic boundaries and provenance rather than allowing implicit shell expansion;
+- persist path, byte size, SHA-256, and bounded conversation-memory provenance;
+- support multiple references, quoted paths with spaces, and escaped literal `@` syntax;
+- add unit, integration, security, conversation-memory, and CLI tests for AC-069–AC-075;
+- document Fish and IDE usage and stop after Milestone 12 for review.
+
+Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
 
