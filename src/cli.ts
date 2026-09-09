@@ -17,6 +17,7 @@ import { generateRunReport } from "./report/run-report.js";
 import { discoverHarnessConfig, resolveWorkspace } from "./workspace.js";
 import { continueConversation, readConversation } from "./conversation/service.js";
 import { runGitRegressionAdapter } from "./verification/git-regression-adapter.js";
+import { initializeProjectConfig, projectProfiles, type ProjectProfile } from "./project-profile.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -42,8 +43,9 @@ program.command("doctor").description("Validate local runtime compatibility").op
   process.exitCode = report.ok ? 0 : report.checks.some((check) => ["opencode", "llama.cpp", "OpenCode health/API", "llama.cpp health"].includes(check.name) && check.status !== "pass") ? 4 : 3;
 });
 
-program.command("init").description("Create a safe project-local harness configuration").argument("[directory]", "target directory", ".").action(async (directory) => {
-  const target = path.resolve(directory, "config");
+program.command("init").description("Create a safe project-local harness configuration").argument("[directory]", "target directory", ".").option("--profile <profile>", `project profile: ${projectProfiles.join("|")}`, "auto").action(async (directory, options) => {
+  if (!projectProfiles.includes(options.profile as ProjectProfile)) throw new Error(`invalid project profile: ${options.profile}`);
+  const root = path.resolve(directory); const target = path.join(root, "config");
   await mkdir(target, { recursive: true });
   const candidates = [path.resolve(moduleDirectory, "../config/harness.example.yaml"), path.resolve(moduleDirectory, "../../config/harness.example.yaml")];
   const source = await candidates.reduce<Promise<string>>(async (found, candidate) => {
@@ -52,10 +54,8 @@ program.command("init").description("Create a safe project-local harness configu
     try { await access(candidate); return candidate; } catch { return ""; }
   }, Promise.resolve(""));
   if (!source) throw new Error("Packaged config/harness.example.yaml was not found");
-  const destination = path.join(target, "harness.yaml");
-  const { readFile } = await import("node:fs/promises");
-  await writeFile(destination, await readFile(source), { flag: "wx", mode: 0o600 });
-  process.stdout.write(`Created ${destination}\n`);
+  const { destination, detected } = await initializeProjectConfig(root, source, options.profile as ProjectProfile);
+  process.stdout.write(`Created ${destination}\nProfile: ${detected.profile} (${detected.evidence.join(", ")})\nConfigured gates: ${Object.entries(detected.quality).filter(([, value]) => value).map(([name]) => name).join(", ") || "none; configure explicitly before implementation"}\n`);
 });
 
 program.command("run", { isDefault: true }).description("Execute in the current Git workspace").argument("[task]", "inline task description").option("--repo <path>", "target Git workspace", ".").option("--requirements <file>", "requirements Markdown file").option("-c, --config <file>", "configuration file").option("--new", "start a new workspace conversation").option("--definition-of-done <text>", "explicit definition of done").action(async (task, options) => {

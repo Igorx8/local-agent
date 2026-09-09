@@ -649,6 +649,18 @@ Requirements:
 - a failed required gate blocks success;
 - optional gates are clearly marked.
 
+### 12.0 Project-language discovery and safe defaults
+
+The harness core and packaged fallback configuration must be language agnostic. `harness init` deterministically derives a project profile from repository-owned marker files; no model may choose, rewrite, or interpolate a quality command. The first supported profiles are Node (`package.json` plus its lockfile), Python (`pyproject.toml`), Rust (`Cargo.toml`), Go (`go.mod`), and `none` for documentation-only or unrecognized projects.
+
+- the packaged fallback config contains no ecosystem-specific gate or regression command;
+- Node config includes only scripts that actually exist and selects npm, pnpm, Yarn, or Bun from the lockfile;
+- Python, Rust, and Go profiles use executable-plus-argv commands with no shell parsing;
+- an unrecognized/docs-only repository receives explicit null gates and cannot report test coverage that did not run;
+- multiple root ecosystem markers fail closed as ambiguous unless the operator selects `--profile`; monorepo package discovery and multiple named gate groups remain a separately scoped enhancement;
+- generated model registry and router paths remain valid when the config is created in another repository;
+- `doctor` remains the authority for whether configured executables are installed; a detected profile is not evidence that a gate passed.
+
 ### 12.1 Baseline gates
 
 Run all configured required gates before any model edits source code. Persist:
@@ -1458,6 +1470,15 @@ Suggested exit codes:
 - AC-076: `harness run`, `continue`, and `resume` print the `runId` and isolated worktree path immediately, then emit concise stage, role/model, checkpoint, gate, retry, handoff, pause, and terminal-status progress without requiring a second terminal.
 - AC-077: A `--follow`/progress mode refreshes human-readable status without exposing prompts, secrets, or unbounded model logs; structured JSON/JSONL output remains available for IDE integrations and scripts.
 
+### Language-agnostic project gates
+
+- AC-078: The packaged fallback config has no Node, Python, Rust, Go, or other ecosystem-specific quality or regression command.
+- AC-079: `harness init` deterministically detects Node, Python, Rust, Go, or a no-gates profile from repository-owned markers, and reports the selected profile and configured gates.
+- AC-080: Node initialization configures only declared package scripts and derives the package manager from a repository lockfile; Python, Rust, and Go commands remain executable-plus-argv values without shell interpolation.
+- AC-081: Documentation-only and unknown projects receive explicit null gates; skipped capability is never represented as a passing test.
+- AC-082: Multiple root ecosystem markers fail closed until an operator selects an explicit profile, and `doctor` validates the resulting executable availability.
+- AC-083: A configuration generated in another repository retains valid absolute paths to the local model registry and router preset.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1599,6 +1620,10 @@ Incremental update (2026-09-06): semantic triage retry hardening is implemented.
 Incremental update (2026-09-07): AC-066 passes with distinct persisted pre/post reboot boot IDs and successful Fish/IDE-terminal startup. AC-064 remains runtime-blocked after three fail-closed live attempts; deterministic handoff coverage passes, but malformed local-model abstraction/bootstrap responses prevented a successful two-handoff run. Bounded bootstrap retries, rejected-session aborts, wrapper-tolerant JSON extraction, mutation-tool denial, and exact abstraction/bootstrap shapes are now implemented. AC-063, AC-064, AC-065, and AC-068 remain open; AC-062, AC-066, and AC-067 pass.
 
 Close Milestone 11 through independently resumable validation slices. Each slice must write its report and assertion result before the next begins: `11A` AC-063 repair proof; `11B` AC-064 two-handoff continuity; `11C` AC-065 pause/resume; and `11D` AC-068 five-turn endurance. A stopped Codex session must be able to continue from the first incomplete slice by reading persisted artifacts. Do not combine all remaining scenarios into one foreground command or defer every verdict until the end.
+
+Before resuming live validation, slice `11E` closes the language-assumption defect exposed by a documentation-only repository: remove ecosystem commands from the packaged fallback, add deterministic `harness init --profile auto|none|node|python|rust|go`, fail closed on ambiguous roots, keep generated local-model paths portable across repositories, and pass fixture tests for AC-078–AC-083. This slice changes configuration only; it does not turn a skipped gate into proof of correctness and does not complete any pending live criterion.
+
+Incremental update (2026-09-09): slice `11E` passes AC-078–AC-083 with TypeScript validation, 102 unit/integration tests, a production build, and initialization of the documentation-only `distributed-ticketing-lab` fixture as profile `none`. Its generated config contains zero repository commands and valid absolute local-model paths. Runtime health remains separate from this deterministic verdict and must still be checked in the operator's unsandboxed terminal.
 
 The default local regression adapter is `harness regression-proof <command> [args...]`. It must materialize the exact defective and repaired checkpoints, overlay repair-changed tests onto the defective snapshot for production repairs, preserve the original defective test for test-only repairs, execute only the configured command argv, require non-zero before and zero after, and reject model-authored reproduction text as executable input.
 
