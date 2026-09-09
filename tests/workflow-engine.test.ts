@@ -89,6 +89,10 @@ describe("WorkflowEngine", () => {
     const fixture = await setup(outputs); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
     expect(result.status).toBe("succeeded"); expect(result.counters.inferenceRetries).toBe(2); expect(fixture.roles.invocations.filter((item) => item.role === "testArchitect")).toHaveLength(2); expect(fixture.roles.invocations.filter((item) => item.role === "planner")).toHaveLength(3);
   });
+  it("requires final audit problems to remain inside the JSON contract", async () => {
+    const fixture = await setup(baseOutputs()); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
+    expect(result.status).toBe("succeeded"); expect(fixture.roles.invocations.find((item) => item.role === "auditor")?.prompt).toContain("encode it in findings and decision");
+  });
   it("escalates when a repaired finding reappears", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };
     const outputs = baseOutputs(); outputs.repositoryReviewer = [{ findings: [finding] }, { findings: [finding] }]; outputs.requirementsReviewer = [{ findings: [] }, { findings: [] }];
