@@ -82,6 +82,13 @@ describe("WorkflowEngine", () => {
     expect(result.stage).toBe("SUCCEEDED"); expect(result.counters.inferenceRetries).toBe(1); expect(fixture.roles.invocations.filter((item) => item.role === "validator")).toHaveLength(2);
     expect(fixture.roles.invocations.find((item) => item.role === "validator")?.prompt).toContain('"findingIds"');
   });
+  it("retries schema-valid oracle and plan outputs that reference descriptions instead of criterion ids", async () => {
+    const outputs = baseOutputs(); const validOracle = outputs.testArchitect![0]; const validPlan = outputs.planner![1];
+    outputs.testArchitect = [{ tests: [{ id: "OT-BAD", acceptanceCriteria: ["works"], behaviorPartition: "invalid", edgeCases: [], description: "wrong reference" }], implementationDiffInspected: false }, validOracle];
+    outputs.planner = [outputs.planner![0], { steps: [{ id: "P-BAD", description: "bad", acceptanceCriteria: ["works"], files: [], risks: [] }], allowedPaths: [], prohibitedActions: [] }, validPlan];
+    const fixture = await setup(outputs); const result = await fixture.engine.run({ requirements: "feature", definitionOfDone: "tests pass" });
+    expect(result.status).toBe("succeeded"); expect(result.counters.inferenceRetries).toBe(2); expect(fixture.roles.invocations.filter((item) => item.role === "testArchitect")).toHaveLength(2); expect(fixture.roles.invocations.filter((item) => item.role === "planner")).toHaveLength(3);
+  });
   it("escalates when a repaired finding reappears", async () => {
     const finding = { id: "REV-1", severity: "high", acceptanceCriterion: "AC-X", problem: "broken", evidence: "fixture", reproduction: "npm test", expectedBehavior: "pass", actualBehavior: "fail", suggestedFix: "minimal", confidence: "high" };
     const outputs = baseOutputs(); outputs.repositoryReviewer = [{ findings: [finding] }, { findings: [finding] }]; outputs.requirementsReviewer = [{ findings: [] }, { findings: [] }];
