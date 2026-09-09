@@ -73,3 +73,9 @@ To keep a Codex usage-limit interruption from hiding the verdict, finish the rem
 4. **11D — endurance (AC-068):** execute five individually monitored prompts. Persist one report after each prompt and run the ancestry/resource assertion incrementally; the fifth prompt only supplies the final endurance verdict.
 
 Completed slices do not rerun after a Codex session ends. The next session reads the reports and begins with the first missing or failed slice.
+
+### Slice 11A attempt — 2026-09-09
+
+Run `20260909140103-da32d99c` exercised reviewer discovery, validation, the switch to `qwen3-coder-impl`, repair checkpoint `bc9cbb80949048fbff304a67ba644cac7834bc13`, fail-before/pass-after regression proof, and repeated passing test/typecheck gates. It then failed closed before final audit because independent reviewers reused `F-001` for different findings and the merge retained both IDs, making exact triage coverage impossible. Resource evidence passed: maximum one model process, approximately 0.004 MiB swap growth, and final `model.stopped`. Report: `/home/igor/personal/local-agent-e2e/.agent-harness/operational-validation/11A-repair.json`.
+
+The merge now deterministically namespaces only colliding non-duplicate IDs while preserving semantic duplicate attribution. This is covered by a regression test. AC-063 remains pending until a fresh 11A rerun reaches final success and its `repair` assertion passes.

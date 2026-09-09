@@ -13,6 +13,12 @@ describe("review merge and objective progress", () => {
     const result = mergeReviews({ findings: [finding] }, { findings: [duplicate] });
     expect(result).toHaveLength(1); expect(result[0]?.sources).toEqual(["repository", "requirements"]); expect(result[0]?.duplicateIds).toEqual(["REQ-2"]);
   });
+  it("assigns deterministic unique ids when independent reviewers reuse an id for different findings", () => {
+    const different = { ...finding, acceptanceCriterion: "AC-Y", problem: "Different defect" };
+    const result = mergeReviews({ findings: [finding] }, { findings: [different] });
+    expect(result.map((item) => item.id)).toEqual(["REV-1", "requirements:REV-1"]);
+    expect(new Set(result.map((item) => item.id)).size).toBe(result.length);
+  });
   it("grants continuation only with measurable improvement", () => {
     const previous = { gates: [gate("failed")], confirmed: [finding], provenCriteria: 0, changedFiles: 3 };
     expect(evaluateProgress(previous, { gates: [gate("passed")], confirmed: [], provenCriteria: 1, changedFiles: 2 }).decision).toBe("stop_success");

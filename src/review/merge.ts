@@ -6,10 +6,20 @@ function key(finding: Finding): string { return [finding.acceptanceCriterion, fi
 
 export function mergeReviews(repository: Review, requirements: Review): MergedFinding[] {
   const merged = new Map<string, MergedFinding>();
+  const usedIds = new Set<string>();
   for (const [source, review] of [["repository", repository], ["requirements", requirements]] as const) for (const finding of review.findings) {
     const identity = key(finding); const existing = merged.get(identity);
     if (existing) { existing.sources.push(source); existing.duplicateIds.push(finding.id); }
-    else merged.set(identity, { ...finding, sources: [source], duplicateIds: [] });
+    else {
+      let id = finding.id;
+      if (usedIds.has(id)) {
+        id = `${source}:${finding.id}`;
+        let suffix = 2;
+        while (usedIds.has(id)) id = `${source}:${finding.id}#${suffix++}`;
+      }
+      usedIds.add(id);
+      merged.set(identity, { ...finding, id, sources: [source], duplicateIds: [] });
+    }
   }
   return [...merged.values()];
 }
