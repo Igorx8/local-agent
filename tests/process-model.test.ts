@@ -12,11 +12,11 @@ describe("explicit process model lifecycle", () => {
       processes.push(process); return process;
     };
     const fetcher: FetchLike = async (input) => new Response(JSON.stringify(new URL(String(input)).pathname === "/health" ? { status: "ok" } : { data: activeAlias ? [{ id: activeAlias }] : [] }), { status: activeAlias ? 200 : 503 });
-    const order: string[] = []; const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { one: { command: "llama-server", args: ["one"] }, two: { command: "llama-server", args: ["two"] } }, fetcher, launcher(command) { order.push(`load-${command.args[0]}`); return launcher(command); }, async releaseProbe() { order.push("released"); return true; }, startupTimeoutMs: 100, shutdownTimeoutMs: 100 });
+    const order: string[] = []; const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { one: { command: "llama-server", args: ["one"] }, two: { command: "llama-server", args: ["two"] } }, fetcher, launcher(command) { order.push(`load-${command.args[0]}`); return launcher(command); }, async releaseProbe() { order.push("released"); return true; }, async sleeper(milliseconds) { order.push(`cooldown-${milliseconds}`); }, restartCooldownMs: 2000, startupTimeoutMs: 100, shutdownTimeoutMs: 100 });
     expect((await manager.ensureModel("one")).alias).toBe("one");
     expect((await manager.ensureModel("two")).alias).toBe("two");
     expect(signals).toContain("SIGTERM"); expect(processes).toHaveLength(2);
-    expect(order).toEqual(["load-one", "released", "load-two"]);
+    expect(order).toEqual(["load-one", "released", "cooldown-2000", "load-two"]);
     manager.beginRequest("two"); await expect(manager.stop()).rejects.toThrow(/active/); manager.endRequest("two"); await manager.stop();
   });
 });

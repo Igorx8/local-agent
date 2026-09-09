@@ -13,5 +13,5 @@ export function createModelManager(config: HarnessConfig, options: { registry?: 
   if (config.runtime.modelStrategy === "router") return new RouterModelManager({ baseUrl: config.runtime.llamaUrl, apiKey, startupTimeoutMs: config.runtime.modelStartupTimeoutMs, shutdownTimeoutMs: config.runtime.modelShutdownTimeoutMs, releaseProbe, ...(expectedPaths ? { expectedPaths } : {}), ...options.router });
   const models = options.registry && apiKey ? Object.fromEntries(Object.keys(options.registry.models).map((alias) => [alias, explicitProcessProfile(options.registry!, alias, options.entryPoint ?? { command: "llama", prefix: ["serve"] }, apiKey)])) : config.modelProcesses;
   if (!Object.keys(models).length) throw new Error(`explicit process strategy requires a registry and ${config.apiKeyEnv}`);
-  return new ProcessModelManager({ baseUrl: config.runtime.llamaUrl, models, apiKey, startupTimeoutMs: config.runtime.modelStartupTimeoutMs, shutdownTimeoutMs: config.runtime.modelShutdownTimeoutMs, releaseProbe, ...options.process });
+  return new ProcessModelManager({ baseUrl: config.runtime.llamaUrl, models, apiKey, startupTimeoutMs: config.runtime.modelStartupTimeoutMs, shutdownTimeoutMs: config.runtime.modelShutdownTimeoutMs, restartCooldownMs: config.runtime.modelRestartCooldownMs, releaseProbe, ...options.process });
 }

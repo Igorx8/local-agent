@@ -11,6 +11,8 @@ The harness must run the three role models sequentially because the target GPU c
 
 `runtime.modelShutdownTimeoutMs` bounds unload, process/port release, and VRAM release. If the barrier times out, no next-model load is sent. The run fails, further mutation is blocked, and the evidence remains in its event log. The final active model goes through the same cleanup when a run succeeds, fails, pauses, escalates, or throws.
 
+Whole-process isolation is now the safe default. On an alias change the previous process group must exit, its health endpoint must disappear, VRAM must fall below the configured threshold, and `modelRestartCooldownMs` must elapse before the next process is launched. Router mode remains available only as an explicit opt-in for hosts where repeated in-process GGUF unmapping has been proven stable.
+
 The handoff remains correct because `WorkflowEngine.invoke` waits for the model response, writes session/model state and response artifacts, and awaits `performHandoff`. That method keeps mutation blocked until the continuity adapter has written and validated the handoff and verified the new session bootstrap. Only after `invoke` returns can a later role call `ensureModel` and trigger an alias switch.
 
 All production profiles use llama.cpp `--load-mode none`. Live validation found a kernel bad-page-map failure while unmapping a memory-mapped GGUF after an otherwise orderly single-model switch. Disabling mmap-backed model loading avoids retaining problematic file mappings during repeated unload/load cycles on this host. This complements, rather than replaces, the unload and VRAM barriers.

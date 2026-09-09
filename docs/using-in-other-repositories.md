@@ -2,24 +2,16 @@
 
 O `harness` pode ser executado em qualquer projeto pessoal versionado com Git. Não é necessário copiar o código do agente para cada projeto.
 
-## Iniciar os serviços locais
+## Iniciar o serviço local
 
-Abra dois terminais. No primeiro, inicie o roteador llama.cpp limitado a um modelo carregado por vez:
-
-```fish
-llama-server \
-  --models-preset /home/igor/personal/local-agent/config/models.local.ini \
-  --models-max 1 \
-  --host 127.0.0.1 \
-  --port 8080
-```
-
-No segundo, inicie o OpenCode com a configuração local:
+Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.
 
 ```fish
 set -lx OPENCODE_CONFIG /home/igor/personal/local-agent/config/opencode.local.json
 opencode serve --hostname 127.0.0.1 --port 4096
 ```
+
+Antes de uma tarefa, `harness model status` não deve mostrar um processo llama.cpp residual. O modo `router` continua disponível como opt-in, mas não é recomendado nesta máquina devido à falha de kernel observada durante troca de GGUF.
 
 Valide o ambiente antes de iniciar uma tarefa:
 

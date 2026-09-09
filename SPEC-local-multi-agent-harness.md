@@ -1198,9 +1198,10 @@ version: 1
 runtime:
   opencodeUrl: http://127.0.0.1:4096
   llamaUrl: http://127.0.0.1:8080
-  modelStrategy: router
+  modelStrategy: process
   modelStartupTimeoutMs: 600000
-    modelShutdownTimeoutMs: 60000
+  modelShutdownTimeoutMs: 60000
+  modelRestartCooldownMs: 2000
   modelUnloadVramThresholdMiB: 2048
   localOnly: true
 
@@ -1650,6 +1651,8 @@ Slice 11D uses a resumable one-turn adapter. Each invocation requires the expect
 The first 11D turn, run `20260909201114-7696126e`, failed closed at final audit because all bounded auditor attempts returned a narrative verdict instead of JSON. No endurance progress was committed and turn 2 was not allowed to start. The run retained one-model, zero attributable model-swap growth, and final cleanup evidence. The audit prompt now requires critical problems to be represented inside the typed `findings` and `decision` fields and forbids narrative output outside the JSON object; a new conversation must restart turn 1 after deterministic tests pass.
 
 The restarted 11D conversation passed three exact-ancestry turns with zero inference retries; its fourth run `20260909202826-6ad616de` failed closed. Local OpenCode session evidence identifies `CRITICAL - MAXIMUM STEPS REACHED` as a platform-injected terminal message after the auditor wasted its bounded steps attempting unavailable Git-history discovery. Final audit now receives deterministic changed-file, gate, and independent-review evidence in the prompt, must not rediscover Git history, and may use at most two optional tool calls before returning JSON. The step limit is not raised. AC-068 remains pending and requires a fresh five-success conversation after deterministic tests pass.
+
+The next fresh sequence passed two turns, then the host hard-froze in run `20260909204159-7f22de6b` exactly as execution moved from `qwen36-main` planning to `qwen3-coder-impl` implementation, before a response or checkpoint. The prior-boot kernel journal records list corruption and RCU exit warnings at that timestamp, without OOM-killer or NVIDIA Xid evidence. No completed turn-3 report exists; progress remains durably at two. Given earlier bad-page-map evidence during GGUF unmapping on this host, router switching is no longer a safe default. Explicit process isolation now requires process-group exit, endpoint disappearance, VRAM release, and a configurable post-release cooldown before launching another alias. Router mode is explicit opt-in. AC-068 remains pending until deterministic lifecycle tests and a fresh five-turn process-isolated run pass.
 
 The default local regression adapter is `harness regression-proof <command> [args...]`. It must materialize the exact defective and repaired checkpoints, overlay repair-changed tests onto the defective snapshot for production repairs, preserve the original defective test for test-only repairs, execute only the configured command argv, require non-zero before and zero after, and reject model-authored reproduction text as executable input.
 

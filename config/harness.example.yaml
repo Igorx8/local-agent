@@ -2,9 +2,12 @@ version: 1
 runtime:
   opencodeUrl: http://127.0.0.1:4096
   llamaUrl: http://127.0.0.1:8080
-  modelStrategy: router
+  # Whole-process isolation is the safe default for machines that cannot keep
+  # both large models resident. Router mode remains an explicit opt-in.
+  modelStrategy: process
   modelStartupTimeoutMs: 600000
   modelShutdownTimeoutMs: 60000
+  modelRestartCooldownMs: 2000
   modelUnloadVramThresholdMiB: 2048
   localOnly: true
 modelRegistry: ./config/models.local.yaml

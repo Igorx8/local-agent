@@ -7,7 +7,7 @@ export interface ManagedProcess { pid?: number; stop(signal: NodeJS.Signals): vo
 export type ProcessLauncher = (command: ModelProcessCommand) => ManagedProcess;
 export interface ProcessManagerOptions {
   baseUrl: string; models: Record<string, ModelProcessCommand>; apiKey?: string; startupTimeoutMs?: number; shutdownTimeoutMs?: number;
-  fetcher?: FetchLike; launcher?: ProcessLauncher; releaseProbe?: (pid?: number) => Promise<boolean>; onProcessOutput?: (stream: "stdout" | "stderr", text: string) => void;
+  restartCooldownMs?: number; fetcher?: FetchLike; launcher?: ProcessLauncher; releaseProbe?: (pid?: number) => Promise<boolean>; sleeper?: (milliseconds: number) => Promise<void>; onProcessOutput?: (stream: "stdout" | "stderr", text: string) => void;
 }
 
 function launch(command: ModelProcessCommand, onOutput?: ProcessManagerOptions["onProcessOutput"]): ManagedProcess {
@@ -24,7 +24,8 @@ export class ProcessModelManager implements ModelLifecycle {
   private activeRequests = 0;
   private readonly fetcher: FetchLike;
   private readonly launcher: ProcessLauncher;
-  constructor(private readonly options: ProcessManagerOptions) { this.fetcher = options.fetcher ?? fetch; this.launcher = options.launcher ?? ((command) => launch(command, options.onProcessOutput)); }
+  private readonly sleeper: (milliseconds: number) => Promise<void>;
+  constructor(private readonly options: ProcessManagerOptions) { this.fetcher = options.fetcher ?? fetch; this.launcher = options.launcher ?? ((command) => launch(command, options.onProcessOutput)); this.sleeper = options.sleeper ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))); }
   status(): ModelStatus { return { ...this.current }; }
   beginRequest(alias: string): void { if (this.current.alias !== alias || this.current.state !== "healthy") throw new Error(`model is not healthy: ${alias}`); this.activeRequests++; this.current = { ...this.current, state: "generating" }; }
   endRequest(alias: string): void { if (this.current.alias !== alias || !this.activeRequests) throw new Error(`no active request for model: ${alias}`); this.activeRequests--; if (!this.activeRequests) this.current = { ...this.current, state: "healthy" }; }
@@ -46,16 +47,16 @@ export class ProcessModelManager implements ModelLifecycle {
     }, timeout);
     if (this.options.releaseProbe) await pollUntil(() => this.options.releaseProbe!(process.pid), timeout);
   }
-  private async stopProcess(): Promise<void> {
-    if (!this.process) return;
+  private async stopProcess(): Promise<boolean> {
+    if (!this.process) return false;
     this.current = { ...this.current, state: "unloading" };
-    const process = this.process; process.stop("SIGTERM"); await this.waitForExit(process); this.process = undefined;
+    const process = this.process; process.stop("SIGTERM"); await this.waitForExit(process); this.process = undefined; return true;
   }
   async ensureModel(alias: string): Promise<ModelStatus> {
     if (this.activeRequests) throw new ActiveModelRequestError("cannot switch models while a response is active");
     const command = this.options.models[alias]; if (!command) throw new Error(`no process command configured for model: ${alias}`);
     if (this.current.alias === alias && this.current.state === "healthy") return this.status();
-    await this.stopProcess();
+    const stoppedPrevious = await this.stopProcess(); if (stoppedPrevious && (this.options.restartCooldownMs ?? 0) > 0) await this.sleeper(this.options.restartCooldownMs!);
     for (let attempt = 0; attempt < 2; attempt++) {
       this.current = { alias, state: "loading" }; this.process = this.launcher(command); this.current.pid = this.process.pid;
       try {
