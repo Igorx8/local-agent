@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "harness": "./dist/src/cli.js"
+    "harness": "./dist/src/cli.js",
+    "local-agent": "./dist/src/local-agent.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

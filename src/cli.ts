@@ -19,6 +19,11 @@ import { continueConversation, readConversation } from "./conversation/service.j
 import { runGitRegressionAdapter } from "./verification/git-regression-adapter.js";
 import { initializeProjectConfig, projectProfiles, type ProjectProfile } from "./project-profile.js";
 import { parseProgressMode, ProgressReporter, type ProgressMode } from "./telemetry/progress.js";
+import { ensureOpencodeService } from "./opencode/service.js";
+import { completeSlash, parseSlashCommand, shellHelp } from "./interactive/commands.js";
+import { readShellHistory, writeShellHistory } from "./interactive/history.js";
+import { redact } from "./telemetry/redact.js";
+import { inspectRepository } from "./git/workspace.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -38,6 +43,37 @@ async function conversationalTurn(repository: string, prompt: string, config: Aw
 }
 
 function writeTurnResult(result: Awaited<ReturnType<typeof conversationalTurn>>, mode: ProgressMode): void { const value = { conversationId: result.conversation.id, turn: result.conversation.turns.length, run: result.run }; process.stdout.write(`${JSON.stringify(mode === "jsonl" ? { type: "run.result", ...value } : value, null, mode === "jsonl" ? undefined : 2)}\n`); }
+
+async function optionalRun(repository: string, requested?: string) { try { return await readRun(repository, await resolveRunId(repository, requested)); } catch { return undefined; } }
+async function interactiveShell(repository: string, config: Awaited<ReturnType<typeof loadConfig>>, requestedConversation?: string, forceNew = false): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("local-agent requires a TTY; use harness continue for scripts");
+  const history = await readShellHistory(repository); const service = await ensureOpencodeService({ baseUrl: config.runtime.opencodeUrl }); const terminal = createInterface({ input: process.stdin, output: process.stdout, completer: completeSlash, history: [...history].reverse(), historySize: 100 }); let selected = requestedConversation; let createNew = forceNew;
+  const remember = async (value: string) => { const safe = redact(value, [process.env[config.apiKeyEnv] ?? ""], config.security.redactPatterns); history.push(String(safe)); await writeShellHistory(repository, history); };
+  process.stdout.write(`Local Agent — ${repository}\nOpenCode: ${service.owned ? "started for this shell" : "reusing healthy service"} (${service.url})\nType /help for commands. Plain text starts a workflow turn.\n`);
+  try {
+    while (true) {
+      const input = (await terminal.question("you> ")).trim(); if (!input) continue; await remember(input); let command;
+      try { command = parseSlashCommand(input); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); continue; }
+      if (!command) { try { const result = await conversationalTurn(repository, input, config, selected, createNew); selected = result.conversation.id; createNew = false; process.stdout.write(`agent> turn=${result.conversation.turns.length} status=${result.run.status} conversation=${selected} run=${result.run.runId} commit=${result.run.checkpoints.at(-1)?.commit ?? "none"}\n`); } catch (error) { process.stderr.write(`turn failed: ${error instanceof Error ? error.message : String(error)}\n`); } continue; }
+      try {
+        if (command.name === "help") process.stdout.write(`${shellHelp}\n`);
+        else if (command.name === "clear") process.stdout.write("\u001Bc");
+        else if (command.name === "new") { selected = undefined; createNew = true; process.stdout.write("A new conversation will be created by the next prompt.\n"); }
+        else if (command.name === "status") { const conversation = await readConversation(repository, selected).catch(() => undefined); const run = await optionalRun(repository, conversation?.state.activeRunId); process.stdout.write(`${JSON.stringify({ conversation: conversation ? { id: conversation.state.id, status: conversation.state.status, turns: conversation.state.turns.length, activeRunId: conversation.state.activeRunId } : null, run: run ? { runId: run.runId, stage: run.stage, status: run.status, model: run.activeModel, counters: run.counters } : null }, null, 2)}\n`); }
+        else if (command.name === "memory") { const current = await readConversation(repository, selected); selected = current.state.id; process.stdout.write(`${JSON.stringify({ conversationId: selected, compactedTurns: current.memory.compacted.length, recent: current.memory.recent.map(({ sequence, runId, status, baseCommit, finalCommit, summary, artifacts, references }) => ({ sequence, runId, status, baseCommit, finalCommit, summary, artifacts, references })) }, null, 2)}\n`); }
+        else if (command.name === "files") { const current = await readConversation(repository, selected); selected = current.state.id; process.stdout.write(`${JSON.stringify(current.memory.recent.map((turn) => ({ sequence: turn.sequence, runId: turn.runId, references: turn.references })), null, 2)}\n`); }
+        else if (command.name === "worktree") { const run = await optionalRun(repository); if (!run) throw new Error("no run found"); const identity = await inspectRepository(run.repositoryPath); process.stdout.write(`${JSON.stringify({ runId: run.runId, worktree: run.repositoryPath, branch: identity.branch, commit: identity.commit, dirty: identity.dirty }, null, 2)}\n`); }
+        else if (command.name === "model") { const registry = await loadModelRegistry(config.modelRegistry); process.stdout.write(`${JSON.stringify({ process: await readModelRuntime(repository), aliases: await runtimeAliases(registry).catch(() => []) }, null, 2)}\n`); }
+        else if (command.name === "doctor") { const report = await runDoctor(config); for (const check of report.checks) process.stdout.write(`${check.status.toUpperCase().padEnd(7)} ${check.name}: ${check.detail}\n`); }
+        else if (command.name === "report") { const run = await optionalRun(repository, command.args[0]); if (!run) throw new Error("no run found"); const report = await generateRunReport(run); process.stdout.write(`Report written for ${report.runId}: ${report.status} at ${report.stage}; artifacts=${report.artifacts.length}\n`); }
+        else if (command.name === "pause") { const run = await optionalRun(repository, command.args[0]); if (!run) throw new Error("no run found"); process.stdout.write(`Graceful pause requested: ${await requestPause(repository, run.runId)}\n`); }
+        else if (command.name === "handoff") { const run = await optionalRun(repository, command.args[0]); if (!run) throw new Error("no run found"); process.stdout.write(`Handoff requested: ${await requestManualHandoff(repository, run.runId)}\n`); }
+        else if (command.name === "resume") { const run = await optionalRun(repository, command.args[0]); if (!run) throw new Error("no run found"); const reporter = new ProgressReporter({ runId: run.runId, repositoryPath: run.repositoryPath, artifactPath: run.artifactPath }, "human", process.stderr); reporter.start(); try { const result = await resumeRun(repository, run.runId); process.stdout.write(`Resume ${result.state.status}: run=${result.state.runId} stage=${result.state.stage}\n`); } finally { await reporter.stop(); } }
+        else if (command.name === "exit") { const current = await readConversation(repository, selected).catch(() => undefined); if (current?.state.activeRunId) { const run = await optionalRun(repository, current.state.activeRunId); if (run?.status === "active") { process.stderr.write(`Run ${run.runId} is active; use /pause and wait for cleanup before /exit.\n`); continue; } } break; }
+      } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); }
+    }
+  } finally { terminal.close(); await stopLocalModel(repository, config.runtime).catch((error) => process.stderr.write(`Model cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)); await service.close(); }
+}
 
 program.command("regression-proof").description("Run a configured test against repaired and defective checkpoints").argument("<command>").argument("[args...]").action(async (command, args) => { process.stdout.write(`${JSON.stringify(await runGitRegressionAdapter(process.cwd(), command, args))}\n`); });
 
@@ -72,9 +108,10 @@ program.command("continue").description("Execute one prompt in a persistent work
   const repository = await workspace(options.repo); const values = [...words]; let conversationId = options.conversation as string | undefined; if (!conversationId && values[0]?.startsWith("conv-") && values.length > 1) conversationId = values.shift(); const prompt = values.join(" ").trim(); if (!prompt) throw new Error("provide a prompt to continue the conversation"); const mode = parseProgressMode(options.follow ? "human" : options.progress); const result = await conversationalTurn(repository, prompt, await loadConfig(await configuration(repository, options.config)), conversationId, options.new, undefined, mode); writeTurnResult(result, mode); process.exitCode = result.run.status === "succeeded" ? 0 : result.run.status === "escalated" ? 6 : 5;
 });
 
+program.command("shell").description("Open the Claude-like interactive local-agent shell").argument("[conversation-id]").option("--repo <path>", "target Git workspace", ".").option("-c, --config <file>", "configuration file").option("--new", "start a new conversation on the first prompt").action(async (conversationId, options) => { const repository = await workspace(options.repo); await interactiveShell(repository, await loadConfig(await configuration(repository, options.config)), conversationId, options.new); });
+
 program.command("chat").description("Open an interactive persistent workspace conversation").argument("[conversation-id]").option("--repo <path>", "target Git workspace", ".").option("-c, --config <file>", "configuration file").option("--new", "start a new conversation").action(async (conversationId, options) => {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("harness chat requires a TTY; use harness continue for scripts"); const repository = await workspace(options.repo); const config = await loadConfig(await configuration(repository, options.config)); const terminal = createInterface({ input: process.stdin, output: process.stdout }); let selected = conversationId as string | undefined; let createNew = Boolean(options.new); process.stdout.write("Local Agent chat. Commands: /status, /memory, /exit\n");
-  try { while (true) { const prompt = (await terminal.question("you> ")).trim(); if (!prompt) continue; if (prompt === "/exit") break; if (prompt === "/status" || prompt === "/memory") { const current = await readConversation(repository, selected); selected = current.state.id; process.stdout.write(`${JSON.stringify(prompt === "/status" ? current.state : current.memory, null, 2)}\n`); continue; } const result = await conversationalTurn(repository, prompt, config, selected, createNew); selected = result.conversation.id; createNew = false; process.stdout.write(`agent> turn ${result.conversation.turns.length} ${result.run.status}; conversation=${selected}; run=${result.run.runId}; worktree=${result.run.repositoryPath}\n`); } } finally { terminal.close(); }
+  const repository = await workspace(options.repo); await interactiveShell(repository, await loadConfig(await configuration(repository, options.config)), conversationId, options.new);
 });
 
 program.command("status").description("Show the persisted observational dashboard").argument("[run-id]").option("--repo <path>", "target repository", ".").option("--json", "emit JSON").option("--no-tui", "emit one structured JSON line").action(async (requestedRunId, options) => {
