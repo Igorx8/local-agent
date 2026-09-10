@@ -4,7 +4,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { createWorktree, inspectRepository, preflight } from "../src/git/workspace.js";
+import { createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight } from "../src/git/workspace.js";
 import { createCheckpoint } from "../src/git/checkpoints.js";
 
 const run = promisify(execFile);
@@ -32,5 +32,11 @@ describe("Git workspace", () => {
     const checkpoint = await createCheckpoint(worktree, "implementation", 0);
     expect(checkpoint.changedFiles).toEqual(["implementation.txt"]);
     expect(checkpoint.commit).toHaveLength(40);
+  });
+  it("creates only an empty baseline commit for a truly empty unborn repository", async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), "harness-unborn-")); await run("git", ["init", "-b", "main"], { cwd: repo }); await ensureHarnessIgnored(repo); const result = await ensureRepositoryBaseline(repo); expect(result.created).toBe(true); expect(result.commit).toHaveLength(40); expect((await inspectRepository(repo))).toMatchObject({ branch: "main", dirty: false }); expect((await run("git", ["show", "--pretty=format:", "--name-only", "HEAD"], { cwd: repo })).stdout.trim()).toBe(""); expect((await ensureRepositoryBaseline(repo)).created).toBe(false);
+  });
+  it("refuses to capture uncommitted files into an unborn baseline", async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), "harness-unborn-dirty-")); await run("git", ["init", "-b", "main"], { cwd: repo }); await writeFile(path.join(repo, "user-file.txt"), "preserve me\n"); await expect(ensureRepositoryBaseline(repo)).rejects.toThrow(/create the initial commit explicitly/); await expect(run("git", ["rev-parse", "--verify", "HEAD"], { cwd: repo })).rejects.toThrow(); expect((await run("git", ["status", "--porcelain"], { cwd: repo })).stdout).toContain("user-file.txt");
   });
 });

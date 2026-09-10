@@ -6,7 +6,7 @@ import { assertOpencodeAvailable } from "../opencode/health.js";
 import { OpencodeSessions, parseModelAlias } from "../opencode/sessions.js";
 import { createModelManager } from "../models/manager.js";
 import { assertImmutableArtifacts, loadModelRegistry, modelRegistrySchema } from "../models/registry.js";
-import { changedFiles, createWorktree, ensureHarnessIgnored, inspectRepository, preflight } from "../git/workspace.js";
+import { changedFiles, createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight } from "../git/workspace.js";
 import { createCheckpoint } from "../git/checkpoints.js";
 import { captureBaseline } from "../tools/baseline.js";
 import { runGates } from "../tools/gates.js";
@@ -42,7 +42,7 @@ export async function stopRunModel(manager: ModelLifecycle, store: StateStore, a
 
 export async function startRun(options: StartRunOptions): Promise<RunState> {
   if (Boolean(options.requirementsFile) === Boolean(options.requirements?.trim())) throw new Error("provide exactly one requirements file or inline task");
-  const repository = path.resolve(options.repository); await ensureHarnessIgnored(repository); await inspectRepository(repository); const registry = await loadModelRegistry(options.config.modelRegistry); assertImmutableArtifacts(registry); const runId = runIdentifier();
+  const repository = path.resolve(options.repository); await ensureHarnessIgnored(repository); await ensureRepositoryBaseline(repository); await inspectRepository(repository); const registry = await loadModelRegistry(options.config.modelRegistry); assertImmutableArtifacts(registry); const runId = runIdentifier();
   const requirementSource = options.requirementsFile ? path.resolve(options.requirementsFile) : "inline-task"; const harnessRoot = path.join(repository, ".agent-harness"); const worktree = path.join(harnessRoot, "worktrees", runId); const branch = `${options.config.git.branchPrefix}${runId}-${slug(options.requirementsFile ?? options.requirements ?? "task")}`;
   await preflight({ repository, workspaceRoot: harnessRoot, worktreePath: worktree, targetBranch: branch, allowDirtyWorktree: !options.config.git.requireCleanWorktree, protectedBranches: ["main", "master"] });
   await mkdir(harnessRoot, { recursive: true }); await createWorktree(repository, harnessRoot, worktree, branch, options.baseRef);

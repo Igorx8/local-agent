@@ -12,6 +12,15 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return result.stdout.trim();
 }
 
+export async function ensureRepositoryBaseline(repository: string): Promise<{ created: boolean; commit: string }> {
+  const canonical = await realpath(repository); await git(canonical, ["rev-parse", "--is-inside-work-tree"]);
+  const head = await executeConfigured({ command: "git", args: ["rev-parse", "--verify", "HEAD"], required: true, timeoutMs: 30_000 }, { cwd: canonical });
+  if (head.exitCode === 0 && head.stdout.trim()) return { created: false, commit: head.stdout.trim() };
+  const status = await git(canonical, ["status", "--porcelain"]); if (status) throw new Error("Git repository has no initial commit and contains uncommitted files; create the initial commit explicitly before running local-agent");
+  await git(canonical, ["-c", "user.name=Local Agent", "-c", "user.email=local-agent@localhost", "commit", "--allow-empty", "-m", "chore: initialize local-agent baseline"]);
+  return { created: true, commit: await git(canonical, ["rev-parse", "HEAD"]) };
+}
+
 export async function inspectRepository(repository: string): Promise<RepositoryIdentity> {
   await access(repository);
   const canonical = await realpath(repository);

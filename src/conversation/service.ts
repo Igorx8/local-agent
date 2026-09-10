@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { HarnessConfig } from "../config.js";
-import { ensureHarnessIgnored, inspectRepository } from "../git/workspace.js";
+import { ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository } from "../git/workspace.js";
 import { StateStore } from "../state/store.js";
 import type { RunState } from "../state/types.js";
 import { appendEvent } from "../telemetry/events.js";
@@ -22,7 +22,7 @@ async function loadOrCreate(workspace: string, requested?: string, forceNew = fa
 }
 
 export async function continueConversation(options: ContinueConversationOptions): Promise<ConversationTurnResult> {
-  const prompt = options.prompt.trim(); if (!prompt) throw new Error("conversation prompt cannot be empty"); if (Buffer.byteLength(prompt, "utf8") > options.config.conversation.maxMemoryBytes / 2) throw new Error("conversation prompt is too large for bounded memory"); await ensureHarnessIgnored(options.workspace);
+  const prompt = options.prompt.trim(); if (!prompt) throw new Error("conversation prompt cannot be empty"); if (Buffer.byteLength(prompt, "utf8") > options.config.conversation.maxMemoryBytes / 2) throw new Error("conversation prompt is too large for bounded memory"); await ensureHarnessIgnored(options.workspace); await ensureRepositoryBaseline(options.workspace);
   const resolved = await resolveFileReferences(options.workspace, prompt, options.config); const references = referenceProvenance(resolved.references);
   if (options.newConversation && options.conversationId) throw new Error("cannot combine newConversation with conversationId"); const selected = await loadOrCreate(options.workspace, options.conversationId, options.newConversation); const release = await selected.store.acquireLock();
   try {
