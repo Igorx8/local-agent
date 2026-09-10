@@ -2,6 +2,7 @@ import { access, mkdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { harnessConfigSchema, type HarnessConfig } from "../config.js";
 import { connectOpencode } from "../opencode/client.js";
+import { assertOpencodeAvailable } from "../opencode/health.js";
 import { OpencodeSessions, parseModelAlias } from "../opencode/sessions.js";
 import { createModelManager } from "../models/manager.js";
 import { assertImmutableArtifacts, loadModelRegistry, modelRegistrySchema } from "../models/registry.js";
@@ -59,7 +60,7 @@ export async function startRun(options: StartRunOptions): Promise<RunState> {
       async clearManualHandoffRequest() { await unlink(path.join(artifacts, "manual-handoff-request.json")).catch(() => undefined); },
       async pauseRequested() { try { await access(path.join(artifacts, "pause-request.json")); return true; } catch { return false; } },
       async clearPauseRequest() { await unlink(path.join(artifacts, "pause-request.json")).catch(() => undefined); },
-      async preflight() { const current = await inspectRepository(worktree); if (current.dirty) throw new Error("isolated worktree became dirty before baseline"); },
+      async preflight() { const current = await inspectRepository(worktree); if (current.dirty) throw new Error("isolated worktree became dirty before baseline"); await assertOpencodeAvailable(options.config.runtime.opencodeUrl); },
       async baseline() { const evidence = await captureBaseline(options.config, worktree, artifacts); return { commit: evidence.commit, treeHash: evidence.treeHash, gates: evidence.gates, artifactPath: path.join(artifacts, "baseline.json") }; },
       async gates(iteration) { return runGates(options.config, worktree, path.join(artifacts, "gates", `iteration-${iteration}`)); },
       async checkpoint(kind, iteration) { const files = await changedFiles(worktree); assertChangedPathsAllowed(files, options.config.scope.allowedPaths, [...options.config.scope.deniedPaths, ...options.config.security.deniedPathPatterns]); return createCheckpoint(worktree, kind, iteration); },
