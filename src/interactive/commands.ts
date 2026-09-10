@@ -1,8 +1,10 @@
-export const slashCommands = ["help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
+export const slashCommands = ["ask", "run", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
 export type SlashCommandName = (typeof slashCommands)[number];
-export interface SlashCommand { name: SlashCommandName; args: string[]; }
+export interface SlashCommand { name: SlashCommandName; args: string[]; web?: boolean; }
 
 export const shellHelp = `Slash commands:
+  /ask [--web] <text>   one fast read-only answer
+  /run <task>           complete audited engineering workflow
   /help                 show this help
   /status               conversation and latest run status
   /memory               bounded memory summary (no prompt contents)
@@ -27,12 +29,16 @@ function argv(value: string): string[] {
 }
 
 export function parseSlashCommand(value: string): SlashCommand | undefined {
-  const trimmed = value.trim(); if (!trimmed.startsWith("/")) return undefined; const parts = argv(trimmed.slice(1)); const name = parts.shift();
+  const trimmed = value.trim(); if (!trimmed.startsWith("/")) return undefined; const match = trimmed.match(/^\/(\S+)(?:\s+([\s\S]*))?$/); const name = match?.[1];
   if (!name || !slashCommands.includes(name as SlashCommandName)) throw new Error(`unknown slash command: /${name ?? ""}; use /help`);
+  if (name === "ask" || name === "run") { let prompt = (match?.[2] ?? "").trim(); let web = false; if (name === "ask" && /^(?:--web)(?:\s|$)/.test(prompt)) { web = true; prompt = prompt.replace(/^--web(?:\s+|$)/, ""); } if (!prompt) throw new Error(`/${name} requires a prompt`); return { name, args: [prompt], ...(web ? { web } : {}) }; }
+  const parts = argv(match?.[2] ?? "");
   const noArguments: SlashCommandName[] = ["help", "status", "memory", "files", "worktree", "model", "doctor", "new", "clear", "exit"];
   if (noArguments.includes(name as SlashCommandName) && parts.length) throw new Error(`/${name} does not accept arguments`); if (parts.length > 1) throw new Error(`/${name} accepts at most one run ID`);
   return { name: name as SlashCommandName, args: parts };
 }
+
+export function routePlainInput(value: string): "ask" | "run" { return /\?\s*$/.test(value) || /^(?:quem|qual|quais|quando|onde|por\s+que|porque|como|o\s+que|você|voce|vc|can|could|what|why|how|when|where|who)\b/i.test(value.trim()) ? "ask" : "run"; }
 
 export function completeSlash(line: string): [string[], string] {
   const token = line.trimStart(); if (!token.startsWith("/") || token.includes(" ")) return [[], line]; const matches = slashCommands.map((name) => `/${name}`).filter((name) => name.startsWith(token)); return [matches.length ? matches : slashCommands.map((name) => `/${name}`), token];

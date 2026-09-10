@@ -68,6 +68,8 @@ Explicit `@arquivo` references, security limits, Fish quoting, and immediate hum
 
 Zero-argument startup, managed OpenCode ownership, slash commands, completion, history, and cleanup are documented in [Milestone 13 interactive shell](docs/milestone-13-interactive-shell.md).
 
+Fast read-only questions, controlled web reads, deterministic routing, and the complete `/run` workflow are documented in [Milestone 14 fast ask](docs/milestone-14-fast-ask.md).
+
 Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
 
 Persistent multi-prompt sessions, bounded memory, IDE commands, and fail-closed continuation are documented in [Milestone 9 conversations](docs/milestone-9-conversations.md).

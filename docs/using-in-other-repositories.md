@@ -13,6 +13,15 @@ local-agent
 
 O shell detecta o Git workspace e mostra `/help` com todos os comandos. Mensagens comuns iniciam turns; `@arquivo` anexa arquivos; Tab completa slash commands. Ele reutiliza um OpenCode saudável ou inicia e encerra uma instância própria usando a configuração local. Portanto, a seção manual abaixo é necessária apenas para quem prefere manter o serviço compartilhado ou usar os comandos não interativos.
 
+Perguntas simples usam uma inferência somente leitura. Use `/ask` para forçar esse caminho, `/ask --web` para ler uma URL explícita com controles de rede, e `/run` para forçar o workflow completo que altera código:
+
+```text
+/ask como este projeto está organizado?
+/ask explique @README.md
+/ask --web resuma https://example.com/documentacao
+/run implemente a primeira etapa de @plano.md
+```
+
 ## Iniciar o serviço local
 
 Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.

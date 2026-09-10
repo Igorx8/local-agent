@@ -1491,6 +1491,16 @@ Suggested exit codes:
 - AC-090: `/clear` affects only terminal presentation, while `/exit` cooperatively refuses to abandon an active run and performs owned-service/model cleanup before returning control to the shell.
 - AC-091: The prompt provides persistent local command history and completion for slash commands; Fish and IDE documentation cover zero-argument startup, service ownership, recovery, file references, and all commands.
 
+### Fast questions and explicit workflow routing
+
+- AC-092: `/ask` performs one read-only local-model request and returns its text without creating a workflow run, worktree, branch, checkpoint, gate, reviewer, repair, or audit.
+- AC-093: `/ask` supports the same validated `@file` references as workflow prompts and persists only bounded question/answer and file provenance.
+- AC-094: `/run` always executes the complete audited engineering workflow, including isolated worktree, planning, implementation, deterministic gates, independent reviews, repair loop, and final audit.
+- AC-095: Plain questions route deterministically to read-only ask mode; ambiguous action requests never gain mutation permission from probabilistic model classification and can be forced explicitly with `/ask` or `/run`.
+- AC-096: `/ask --web` accepts only explicit HTTP(S) URLs, blocks loopback/private/link-local destinations after DNS resolution and on every redirect, and applies timeout, redirect, content-type, and byte limits.
+- AC-097: Remote content is delimited as untrusted data, never executed, and records URL, byte size, content type, and SHA-256 without cookies, ambient authorization, or response-body leakage in errors.
+- AC-098: Ask-mode interruption cancels its OpenCode session, unloads the model, and leaves no mutating run or residual model process.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1707,6 +1717,19 @@ Milestone 13 must retain all prior single-model residency, conversation, path-se
 Implementation result (2026-09-10): AC-084–AC-091 pass deterministically. The packaged `local-agent` executable selects the current Git workspace and opens the interactive shell with no subcommand. It reuses a healthy OpenCode endpoint or starts an owned SDK server with the explicit local OpenCode configuration, verifies readiness, and closes only owned service state. Plain prompts reuse the bounded conversation workflow, `@file` handling, isolated worktrees, live progress, cooperative interruption, and final model cleanup. Every documented slash command is parsed locally as argv data; unknown/malformed commands cannot start inference. Read-only views omit prompt and referenced-file contents. Private bounded history and slash completion are implemented. TypeScript, full tests, production build, Fish CLI entry/help, and installation validation pass. Milestone 13 is complete and stops here for review.
 
 Post-completion correction (2026-09-10): an initialized but commitless Git repository previously failed at `git rev-parse HEAD`. Before any inference, the harness now creates a deterministic empty baseline commit when the unborn repository has no uncommitted files. When files exist, the interactive shell lists bounded path evidence and requires an explicit `y`/`yes` before staging all current files into the initial commit; refusal makes no Git change. Non-interactive commands remain fail-closed and require an explicit initial commit.
+
+### Milestone 14: fast ask and explicit workflow routing
+
+- add `/ask` as one read-only `qwen36-main` request without workflow/run creation;
+- preserve bounded ask context and secure `@file` provenance without duplicating file contents;
+- add `/run` as the explicit complete engineering workflow entry;
+- route obvious plain questions deterministically to ask and keep ambiguous action text on the conservative run path;
+- add explicit `/ask --web` retrieval with SSRF, redirect, timeout, type, and byte controls;
+- cancel the OpenCode ask session and unload its model on interruption;
+- add routing, parser, web-security, build, and regression tests for AC-092–AC-098;
+- document behavior and stop after Milestone 14 for review.
+
+Implementation result (2026-09-10): AC-092–AC-098 are implemented. Ask mode uses one read-only supervisor session, bounded persisted context, the existing secure file-reference resolver, artifact provenance, cancellation, and final model cleanup. Explicit web mode accepts exactly one HTTP(S) URL, validates DNS and every redirect against local/private/link-local targets, rejects credentials and non-text content, and applies bounded retrieval. `/run` retains the unchanged full audited workflow. Deterministic parser/routing and web-security tests pass alongside the complete regression suite and production build.
 
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 

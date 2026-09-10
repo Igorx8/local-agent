@@ -27,6 +27,8 @@ Cada mensagem continua sendo um run isolado e auditável. O terminal mostra `run
 Digite `/help` para consultar a lista dentro do próprio shell.
 
 ```text
+/ask [--web] <text>   resposta rápida e somente leitura
+/run <task>           workflow completo de engenharia
 /help                 ajuda e sintaxe
 /status               conversa e último run
 /memory               memória resumida, sem prompts
