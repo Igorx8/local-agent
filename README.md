@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–10 are implemented, including persistent workspace conversations, audited isolated runs, and strict single-model GPU residency.
+Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–12 are implemented, including persistent workspace conversations, audited isolated runs, strict single-model GPU residency, explicit file references, and live IDE progress.
 Milestone 11 operational validation is documented in [docs/milestone-11-operational-validation.md](docs/milestone-11-operational-validation.md).
 
 Para executar o agente em outros projetos pela IDE, consulte [Usando o harness em outros repositórios](docs/using-in-other-repositories.md).
@@ -26,6 +26,7 @@ With OpenCode and the llama.cpp router running, open any personal project in the
 
 ```bash
 harness --new "adicione validação, testes e atualize a documentação"
+harness --new 'implemente o plano em @docs/plano.md'
 harness continue "agora cubra também os casos de erro"
 harness chat
 harness status
@@ -53,6 +54,8 @@ Project-specific advanced verification commands use normalized, fail-closed adap
 Context accounting, deterministic Markdown handoffs, semantic abstraction boundaries, bootstrap verification, and the emergency compaction fallback are documented in [Milestone 6 context continuity](docs/milestone-6-context-continuity.md).
 
 Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage are documented in [Milestone 7 visual feedback](docs/milestone-7-visual-feedback.md).
+
+Explicit `@arquivo` references, security limits, Fish quoting, and immediate human/JSONL progress are documented in [Milestone 12 file references and progress](docs/milestone-12-file-references-and-progress.md).
 
 Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
 

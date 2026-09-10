@@ -40,17 +40,21 @@ function parseReferences(input: string): { references: ParsedReference[]; litera
 
 function displayPath(value: string): string { return value.replaceAll("\n", "\\n").slice(0, 300); }
 function inside(root: string, target: string): boolean { const relative = path.relative(root, target); return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative)); }
-function binary(buffer: Buffer): boolean { if (buffer.includes(0)) return true; const sample = buffer.subarray(0, Math.min(buffer.length, 8192)); let controls = 0; for (const byte of sample) if (byte < 9 || (byte > 13 && byte < 32)) controls++; return sample.length > 0 && controls / sample.length > 0.01; }
+function binary(buffer: Buffer): boolean { if (buffer.includes(0)) return true; try { new TextDecoder("utf-8", { fatal: true }).decode(buffer); } catch { return true; } const sample = buffer.subarray(0, Math.min(buffer.length, 8192)); let controls = 0; for (const byte of sample) if (byte < 9 || (byte > 13 && byte < 32)) controls++; return sample.length > 0 && controls / sample.length > 0.01; }
+function denied(relative: string, config: HarnessConfig): boolean { return config.scope.deniedPaths.some((entry) => relative === entry.replace(/\/$/, "") || relative.startsWith(`${entry.replace(/\/$/, "")}/`)) || pathMatchesAnyPattern(relative, config.security.deniedPathPatterns); }
 
 export async function resolveFileReferences(workspace: string, input: string, config: HarnessConfig): Promise<ResolvedPrompt> {
   const parsed = parseReferences(input); if (!parsed.references.length && !parsed.literalEscapes.length && !parsed.errors.length) return { prompt: input, references: [] };
   const root = await realpath(workspace); const failures = [...parsed.errors]; const resolved: FileReference[] = []; const seen = new Set<string>();
   for (const reference of parsed.references) {
     const label = displayPath(reference.value); let canonical: string;
+    if (path.isAbsolute(reference.value)) { failures.push(`${label}: absolute paths are not allowed; use a workspace-relative path`); continue; }
+    const lexical = path.relative(root, path.resolve(root, reference.value)).split(path.sep).join("/");
+    if (!lexical || lexical.startsWith("../") || denied(lexical, config)) { failures.push(`${label}: denied by workspace security policy`); continue; }
     try { canonical = await realpath(path.resolve(root, reference.value)); } catch { failures.push(`${label}: does not exist or is not readable`); continue; }
     if (!inside(root, canonical)) { failures.push(`${label}: resolves outside the selected workspace`); continue; }
     const relative = path.relative(root, canonical).split(path.sep).join("/") || ".";
-    if (pathMatchesAnyPattern(relative, [...config.scope.deniedPaths, ...config.security.deniedPathPatterns])) { failures.push(`${label}: denied by workspace security policy`); continue; }
+    if (denied(relative, config)) { failures.push(`${label}: denied by workspace security policy`); continue; }
     try {
       const metadata = await lstat(canonical); if (!metadata.isFile()) { failures.push(`${label}: is not a regular file`); continue; }
       if (metadata.size > config.fileReferences.maxFileBytes) { failures.push(`${label}: ${metadata.size} bytes exceeds per-file limit ${config.fileReferences.maxFileBytes}`); continue; }

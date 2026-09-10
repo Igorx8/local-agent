@@ -1678,6 +1678,8 @@ Performance findings captured during Milestone 11 must feed a later optimization
 - add unit, integration, security, conversation-memory, progress-output, and CLI tests for AC-069–AC-077;
 - document Fish and IDE usage and stop after Milestone 12 for review.
 
+Implementation result (2026-09-10): AC-069–AC-077 pass deterministically. `run`, `continue`, and `chat` resolve explicit workspace-relative references before a conversation turn or inference begins; canonical path, denied/sensitive path, regular/readable file, binary, per-file, aggregate-byte, and estimated-token checks fail closed and report all rejected targets without their contents. Multiple and quoted paths plus `@@` literal escaping are covered. Each run persists bounded path/size/SHA-256/token provenance and conversation memory retains provenance without referenced contents. `run`, `continue`, and `resume` now emit immediate run/worktree identity and a bounded allowlisted progress stream, with human, off, and JSONL modes. Unit, integration, security, memory, progress, full-suite, build, Fish/IDE documentation, and CLI-help validation pass. Milestone 12 is complete and stops here for review.
+
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.

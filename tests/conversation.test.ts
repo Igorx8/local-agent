@@ -32,7 +32,7 @@ describe("workspace conversations", () => {
   it("persists the active run relationship as soon as the runner creates it", async () => {
     const root = await repository(); let observedRunId: string | undefined;
     const runner = async (options: StartRunOptions): Promise<RunState> => {
-      await options.onCreated?.("run-active");
+      await options.onCreated?.("run-active", root, path.join(root, ".agent-harness", "runs", "run-active"));
       observedRunId = (await readConversation(root)).state.activeRunId;
       return gitRunner(root, [])({ ...options, onCreated: undefined });
     };

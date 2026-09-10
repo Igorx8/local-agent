@@ -30,6 +30,12 @@ describe("explicit file references", () => {
     await expect(resolveFileReferences(root, "@escape @binary @large", config({ maxFileBytes: 16, maxTotalBytes: 32, maxEstimatedTokens: 8 }))).rejects.toThrow(/outside[\s\S]*binary[\s\S]*per-file limit/);
   });
 
+  it("rejects absolute paths and denied path subtrees", async () => {
+    const root = await fixture(); await mkdir(path.join(root, "private")); await writeFile(path.join(root, "private", "key.txt"), "key");
+    const configured = harnessConfigSchema.parse({ version: 1, runtime: {}, models: Object.fromEntries(roles.map((role) => [role, `llama.cpp/${role}`])), workflow: { autoMerge: false }, context: {}, scope: { deniedPaths: ["private"] } });
+    await expect(resolveFileReferences(root, `@${path.join(root, "README.md")} @private/key.txt`, configured)).rejects.toThrow(/absolute paths[\s\S]*denied by workspace/);
+  });
+
   it("rejects aggregate byte and estimated-token overflow without truncation", async () => {
     const root = await fixture(); await writeFile(path.join(root, "a.txt"), "a".repeat(12)); await writeFile(path.join(root, "b.txt"), "b".repeat(12));
     await expect(resolveFileReferences(root, "@a.txt @b.txt", config({ maxFileBytes: 20, maxTotalBytes: 20, maxEstimatedTokens: 4 }))).rejects.toThrow(/aggregate references: 24 bytes[\s\S]*approximately 6 tokens/);

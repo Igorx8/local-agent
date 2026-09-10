@@ -31,6 +31,15 @@ git status
 harness run --new "Analise o projeto e implemente a funcionalidade X"
 ```
 
+Para anexar arquivos explicitamente ao prompt atual:
+
+```fish
+harness run --new 'implemente as etapas de @plano-mestre.md'
+harness continue 'compare @src/api.ts e @"docs/decisões técnicas.md"'
+```
+
+Use `@@` para um arroba literal. Referências são sempre relativas à raiz Git, têm limites determinísticos e falham antes da inferência quando são inválidas, binárias, sensíveis ou escapam do workspace.
+
 O Git workspace atual é detectado automaticamente. Também é possível informar o caminho explicitamente:
 
 ```fish
@@ -81,6 +90,8 @@ harness report RUN_ID
 harness resume RUN_ID
 harness model status
 ```
+
+O próprio `run`, `continue` ou `resume` mostra imediatamente o `runId`, o worktree e o progresso resumido. Para integrações que exigem saída estruturada, use `--progress jsonl`; para silenciar o acompanhamento, use `--progress off`.
 
 O primeiro `Ctrl+C` solicita uma pausa cooperativa. Depois que o run estiver pausado e o modelo tiver sido descarregado, use `harness resume RUN_ID` para continuar do último estado consistente.
 
