@@ -72,6 +72,10 @@ scope:
 security:
   deniedPathPatterns: ["**/.env", "**/.ssh/**"]
   redactPatterns: []
+fileReferences:
+  maxFileBytes: 131072
+  maxTotalBytes: 262144
+  maxEstimatedTokens: 32768
 telemetry:
   jsonLogs: true
   storePrompts: true

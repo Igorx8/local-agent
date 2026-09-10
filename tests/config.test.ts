@@ -15,6 +15,7 @@ describe("harnessConfigSchema", () => {
     expect(parsed.verification.flakyRepetitions).toBe(3);
     expect(parsed.verification.mutationTesting).toBe("changed-files");
     expect(parsed.conversation).toEqual({ maxRecentTurns: 8, maxMemoryBytes: 32768 });
+    expect(parsed.fileReferences).toEqual({ maxFileBytes: 131072, maxTotalBytes: 262144, maxEstimatedTokens: 32768 });
   });
 
   it("rejects non-loopback services", () => {

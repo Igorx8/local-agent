@@ -10,6 +10,7 @@ import { continueConversation, readConversation } from "../src/conversation/serv
 import { StateStore } from "../src/state/store.js";
 import type { RunState } from "../src/state/types.js";
 import type { StartRunOptions } from "../src/workflow/run.js";
+import type { ConversationMemory } from "../src/conversation/types.js";
 
 const execute = promisify(execFile); const roles = ["supervisor", "planner", "testArchitect", "implementer", "repositoryReviewer", "requirementsReviewer", "validator", "repair", "adversarialVerifier", "auditor"];
 function config(overrides: { maxRecentTurns?: number; maxMemoryBytes?: number } = {}): HarnessConfig { return harnessConfigSchema.parse({ version: 1, runtime: {}, models: Object.fromEntries(roles.map((role) => [role, `llama.cpp/${role}`])), workflow: { autoMerge: false }, context: {}, conversation: overrides }); }
@@ -40,6 +41,18 @@ describe("workspace conversations", () => {
   });
 
   it("compacts old facts deterministically within configured bounds", () => {
-    const configured = config({ maxRecentTurns: 2, maxMemoryBytes: 4096 }); let memory = { schemaVersion: 1 as const, conversationId: "conv-test", compacted: [] as string[], recent: [] as Array<{ sequence: number; prompt: string; runId: string; status: string; baseCommit: string; finalCommit?: string; summary: string; artifacts: string[] }> }; const sample = state("run", "/repo", "/artifacts", "succeeded"); for (let sequence = 1; sequence <= 5; sequence++) memory = appendMemory(memory, sequence, `prompt ${sequence}`, { ...sample, runId: `run-${sequence}` }, `base-${sequence}`, `final-${sequence}`, configured); expect(memory.recent.map((turn) => turn.sequence)).toEqual([4, 5]); expect(memory.compacted).toHaveLength(3); expect(Buffer.byteLength(JSON.stringify(memory))).toBeLessThanOrEqual(4096);
+    const configured = config({ maxRecentTurns: 2, maxMemoryBytes: 4096 }); let memory: ConversationMemory = { schemaVersion: 1, conversationId: "conv-test", compacted: [], recent: [] }; const sample = state("run", "/repo", "/artifacts", "succeeded"); for (let sequence = 1; sequence <= 5; sequence++) memory = appendMemory(memory, sequence, `prompt ${sequence}`, { ...sample, runId: `run-${sequence}` }, `base-${sequence}`, `final-${sequence}`, configured); expect(memory.recent.map((turn) => turn.sequence)).toEqual([4, 5]); expect(memory.compacted).toHaveLength(3); expect(Buffer.byteLength(JSON.stringify(memory))).toBeLessThanOrEqual(4096);
+  });
+
+  it("attaches referenced content for the current run but retains only bounded provenance", async () => {
+    const root = await repository(); await writeFile(path.join(root, "design.md"), "private design text\n"); const received: StartRunOptions[] = [];
+    const result = await continueConversation({ workspace: root, prompt: "implement @design.md", config: config(), runner: gitRunner(root, received) });
+    expect(received[0]!.requirements).toContain("private design text"); expect(received[0]!.references).toMatchObject([{ path: "design.md", bytes: 20 }]);
+    const memory = (await readConversation(root, result.conversation.id)).memory; expect(memory.recent[0]!.prompt).toBe("implement @design.md"); expect(JSON.stringify(memory)).not.toContain("private design text"); expect(memory.recent[0]!.references[0]!.sha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("rejects invalid references before creating a conversation turn or invoking a runner", async () => {
+    const root = await repository(); const received: StartRunOptions[] = [];
+    await expect(continueConversation({ workspace: root, prompt: "read @missing.md", config: config(), runner: gitRunner(root, received) })).rejects.toThrow(/file reference validation failed/); expect(received).toHaveLength(0); await expect(readConversation(root)).rejects.toThrow(/no conversation found/);
   });
 });

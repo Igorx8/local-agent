@@ -27,8 +27,9 @@ import { generateRunReport } from "../report/run-report.js";
 import { persistRecoveryPlan, reconcileRun } from "../recovery/reconcile.js";
 import type { ModelLifecycle } from "../models/types.js";
 import { appendEvent } from "../telemetry/events.js";
+import type { FileReference } from "../input/file-references.js";
 
-export interface StartRunOptions { repository: string; requirementsFile?: string; requirements?: string; config: HarnessConfig; definitionOfDone?: string; baseRef?: string; conversation?: { id: string; turn: number }; signal?: AbortSignal; onCreated?(runId: string): Promise<void> | void; }
+export interface StartRunOptions { repository: string; requirementsFile?: string; requirements?: string; references?: Array<Omit<FileReference, "content">>; config: HarnessConfig; definitionOfDone?: string; baseRef?: string; conversation?: { id: string; turn: number }; signal?: AbortSignal; onCreated?(runId: string): Promise<void> | void; }
 function runIdentifier(): string { return `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${crypto.randomUUID().slice(0, 8)}`; }
 function slug(value: string): string { return path.basename(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "task"; }
 export async function stopRunModel(manager: ModelLifecycle, store: StateStore, artifacts: string): Promise<void> {
@@ -49,7 +50,7 @@ export async function startRun(options: StartRunOptions): Promise<RunState> {
   const initial: RunState = { schemaVersion: 1, runId, repositoryPath: worktree, artifactPath: artifacts, stage: "CREATED", status: "active", createdAt: now, updatedAt: now, counters: { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 }, handoffs: [], checkpoints: [], mutatingActionsBlocked: false, manualHandoffRequested: false, ...(options.conversation ? { conversation: { ...options.conversation, baseCommit: options.baseRef ?? (await inspectRepository(repository)).commit } } : {}) };
   await store.initialize(initial); await options.onCreated?.(runId); const release = await store.acquireLock();
   try {
-    await writeArtifact(artifacts, "config.snapshot.json", options.config); await writeArtifact(artifacts, "model-registry.snapshot.json", registry);
+    await writeArtifact(artifacts, "config.snapshot.json", options.config); await writeArtifact(artifacts, "model-registry.snapshot.json", registry); await writeArtifact(artifacts, "file-references.json", { references: options.references ?? [] });
     const requirements = options.requirementsFile ? await readFile(requirementSource, "utf8") : options.requirements!.trim(); const definitionOfDone = options.definitionOfDone ?? "All required gates pass and every acceptance criterion is proven."; await writeArtifact(artifacts, "requirements.json", redact({ source: requirementSource, content: requirements, definitionOfDone }, [process.env[options.config.apiKeyEnv] ?? ""], options.config.security.redactPatterns));
     const client = connectOpencode({ baseUrl: options.config.runtime.opencodeUrl, directory: worktree }); const sessions = new OpencodeSessions(client, worktree);
     const manifest = await createReproducibilityManifest(artifacts, options.config, registry); initial.modelManifest = manifest; await store.write(initial); const manager = createModelManager(options.config, { registry, router: {}, process: {} });

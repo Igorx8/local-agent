@@ -18,7 +18,7 @@ export function evaluateScope(change: ChangeSummary, policy: ScopePolicy): Scope
   return findings;
 }
 
-function globExpression(pattern: string): RegExp {
+export function globExpression(pattern: string): RegExp {
   let source = "";
   for (let index = 0; index < pattern.length; index++) {
     const character = pattern[index];
@@ -29,9 +29,13 @@ function globExpression(pattern: string): RegExp {
   return new RegExp(`^${source}$`);
 }
 
+export function pathMatchesAnyPattern(file: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => globExpression(pattern).test(file));
+}
+
 export function assertChangedPathsAllowed(files: string[], allowedPaths: string[], deniedPatterns: string[]): void {
   for (const file of files) {
-    if (deniedPatterns.some((pattern) => globExpression(pattern).test(file))) throw new Error(`changed path is denied: ${file}`);
+    if (pathMatchesAnyPattern(file, deniedPatterns)) throw new Error(`changed path is denied: ${file}`);
     if (allowedPaths.length && !prefixMatch(file, allowedPaths)) throw new Error(`changed path is outside allowed scope: ${file}`);
   }
 }
