@@ -1480,6 +1480,17 @@ Suggested exit codes:
 - AC-082: Multiple root ecosystem markers fail closed until an operator selects an explicit profile, and `doctor` validates the resulting executable availability.
 - AC-083: A configuration generated in another repository retains valid absolute paths to the local model registry and router preset.
 
+### Interactive local-agent shell
+
+- AC-084: Invoking `local-agent` with no subcommand from any directory inside a Git workspace opens an interactive prompt bound to that workspace, without requiring the operator to remember harness subcommands.
+- AC-085: The interactive entry point reuses a healthy configured OpenCode service or starts one through the installed SDK, records ownership, waits for readiness, and closes only an owned service on every shell exit path.
+- AC-086: Plain input creates or continues the selected bounded workspace conversation, supports `@file` references, and displays the same safe live run progress as non-interactive execution.
+- AC-087: `/help` lists every supported slash command with concise usage, and unknown commands fail locally without starting model inference or a workflow run.
+- AC-088: `/status`, `/memory`, `/files`, `/worktree`, `/model`, `/doctor`, and `/report` expose bounded read-only information without leaking prompts, referenced contents, credentials, or unbounded model logs.
+- AC-089: `/new`, `/resume`, `/pause`, and `/handoff` map to the existing safe conversation/recovery operations and preserve their fail-closed state and Git guarantees.
+- AC-090: `/clear` affects only terminal presentation, while `/exit` cooperatively refuses to abandon an active run and performs owned-service/model cleanup before returning control to the shell.
+- AC-091: The prompt provides persistent local command history and completion for slash commands; Fish and IDE documentation cover zero-argument startup, service ownership, recovery, file references, and all commands.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1679,6 +1690,19 @@ Performance findings captured during Milestone 11 must feed a later optimization
 - document Fish and IDE usage and stop after Milestone 12 for review.
 
 Implementation result (2026-09-10): AC-069–AC-077 pass deterministically. `run`, `continue`, and `chat` resolve explicit workspace-relative references before a conversation turn or inference begins; canonical path, denied/sensitive path, regular/readable file, binary, per-file, aggregate-byte, and estimated-token checks fail closed and report all rejected targets without their contents. Multiple and quoted paths plus `@@` literal escaping are covered. Each run persists bounded path/size/SHA-256/token provenance and conversation memory retains provenance without referenced contents. `run`, `continue`, and `resume` now emit immediate run/worktree identity and a bounded allowlisted progress stream, with human, off, and JSONL modes. Unit, integration, security, memory, progress, full-suite, build, Fish/IDE documentation, and CLI-help validation pass. Milestone 12 is complete and stops here for review.
+
+### Milestone 13: interactive local-agent shell
+
+- add a `local-agent` executable that opens the current Git workspace directly;
+- reuse a healthy OpenCode endpoint or start it through the installed SDK, tracking ownership and readiness before accepting prompts;
+- run plain text as cumulative conversation turns with `@file` support and bounded live progress;
+- implement `/help`, `/status`, `/memory`, `/files`, `/worktree`, `/model`, `/doctor`, `/report`, `/new`, `/resume`, `/pause`, `/handoff`, `/clear`, and `/exit` on top of existing safe operations;
+- reject unknown or malformed slash commands before inference and never execute slash arguments through a shell;
+- provide bounded persisted command history and completion for slash commands;
+- add unit, integration, lifecycle, security, and CLI-entry tests for AC-084–AC-091;
+- document Fish and IDE usage and stop after Milestone 13 for review.
+
+Milestone 13 must retain all prior single-model residency, conversation, path-security, interruption, and no-automatic-merge guarantees. Starting the convenience shell does not authorize background daemons that outlive an owned interactive session.
 
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 
