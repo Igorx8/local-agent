@@ -5,6 +5,7 @@ import { assertPathWithin } from "../tools/policy.js";
 
 export interface PreflightOptions { repository: string; workspaceRoot: string; worktreePath: string; targetBranch: string; allowDirtyWorktree: boolean; protectedBranches: string[]; }
 export interface RepositoryIdentity { repository: string; branch: string; commit: string; treeHash: string; dirty: boolean; }
+export class UnbornRepositoryDirtyError extends Error { constructor(readonly files: string[]) { super("Git repository has no initial commit and contains uncommitted files; create the initial commit explicitly before running local-agent"); this.name = "UnbornRepositoryDirtyError"; } }
 
 async function git(cwd: string, args: string[]): Promise<string> {
   const result = await executeConfigured({ command: "git", args, required: true, timeoutMs: 30_000 }, { cwd });
@@ -12,11 +13,12 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return result.stdout.trim();
 }
 
-export async function ensureRepositoryBaseline(repository: string): Promise<{ created: boolean; commit: string }> {
+export async function ensureRepositoryBaseline(repository: string, includeUncommitted = false): Promise<{ created: boolean; commit: string }> {
   const canonical = await realpath(repository); await git(canonical, ["rev-parse", "--is-inside-work-tree"]);
   const head = await executeConfigured({ command: "git", args: ["rev-parse", "--verify", "HEAD"], required: true, timeoutMs: 30_000 }, { cwd: canonical });
   if (head.exitCode === 0 && head.stdout.trim()) return { created: false, commit: head.stdout.trim() };
-  const status = await git(canonical, ["status", "--porcelain"]); if (status) throw new Error("Git repository has no initial commit and contains uncommitted files; create the initial commit explicitly before running local-agent");
+  const status = await git(canonical, ["status", "--porcelain"]); const files = status ? status.split("\n").map((line) => line.slice(3).split(" -> ").at(-1) ?? "").filter(Boolean) : [];
+  if (files.length && !includeUncommitted) throw new UnbornRepositoryDirtyError(files); if (files.length) await git(canonical, ["add", "--all"]);
   await git(canonical, ["-c", "user.name=Local Agent", "-c", "user.email=local-agent@localhost", "commit", "--allow-empty", "-m", "chore: initialize local-agent baseline"]);
   return { created: true, commit: await git(canonical, ["rev-parse", "HEAD"]) };
 }

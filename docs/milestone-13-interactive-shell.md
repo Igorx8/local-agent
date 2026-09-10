@@ -12,7 +12,7 @@ local-agent
 
 O comando detecta a raiz Git, carrega a configuração, reutiliza o OpenCode quando o endpoint configurado está saudável ou inicia uma instância própria pela API oficial do SDK. Uma instância iniciada pelo shell usa `runtime.opencodeConfig`, espera ficar saudável e é encerrada ao sair. Um serviço que já existia nunca é encerrado pelo shell.
 
-Em um `git init` ainda sem commits e sem arquivos pendentes, o primeiro prompt cria automaticamente um commit-base vazio para viabilizar worktrees. Se existirem arquivos não commitados, o shell pede que você faça o primeiro commit explicitamente e não adiciona esses arquivos por conta própria.
+Em um `git init` ainda sem commits e sem arquivos pendentes, o shell cria automaticamente um commit-base vazio para viabilizar worktrees. Se existirem arquivos não commitados, ele lista uma amostra e pergunta se pode criar o primeiro commit com todos eles. Somente uma resposta explícita `y` ou `yes` autoriza `git add --all`; qualquer outra resposta encerra sem adicionar arquivos. Os comandos não interativos continuam falhando fechado e exigindo um commit inicial explícito.
 
 Texto comum inicia um novo turn da conversa persistente mais recente:
 

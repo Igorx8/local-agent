@@ -39,4 +39,7 @@ describe("Git workspace", () => {
   it("refuses to capture uncommitted files into an unborn baseline", async () => {
     const repo = await mkdtemp(path.join(tmpdir(), "harness-unborn-dirty-")); await run("git", ["init", "-b", "main"], { cwd: repo }); await writeFile(path.join(repo, "user-file.txt"), "preserve me\n"); await expect(ensureRepositoryBaseline(repo)).rejects.toThrow(/create the initial commit explicitly/); await expect(run("git", ["rev-parse", "--verify", "HEAD"], { cwd: repo })).rejects.toThrow(); expect((await run("git", ["status", "--porcelain"], { cwd: repo })).stdout).toContain("user-file.txt");
   });
+  it("creates the first commit with existing files only after explicit consent", async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), "harness-unborn-consent-")); await run("git", ["init", "-b", "main"], { cwd: repo }); await writeFile(path.join(repo, "README.md"), "new project\n"); const result = await ensureRepositoryBaseline(repo, true); expect(result.created).toBe(true); expect((await run("git", ["show", "--pretty=format:", "--name-only", "HEAD"], { cwd: repo })).stdout.trim()).toBe("README.md"); expect((await inspectRepository(repo)).dirty).toBe(false);
+  });
 });

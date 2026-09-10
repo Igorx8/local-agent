@@ -23,7 +23,7 @@ import { ensureOpencodeService } from "./opencode/service.js";
 import { completeSlash, parseSlashCommand, shellHelp } from "./interactive/commands.js";
 import { readShellHistory, writeShellHistory } from "./interactive/history.js";
 import { redact } from "./telemetry/redact.js";
-import { inspectRepository } from "./git/workspace.js";
+import { ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, UnbornRepositoryDirtyError } from "./git/workspace.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -47,10 +47,11 @@ function writeTurnResult(result: Awaited<ReturnType<typeof conversationalTurn>>,
 async function optionalRun(repository: string, requested?: string) { try { return await readRun(repository, await resolveRunId(repository, requested)); } catch { return undefined; } }
 async function interactiveShell(repository: string, config: Awaited<ReturnType<typeof loadConfig>>, requestedConversation?: string, forceNew = false): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("local-agent requires a TTY; use harness continue for scripts");
-  const history = await readShellHistory(repository); const service = await ensureOpencodeService({ baseUrl: config.runtime.opencodeUrl, configFile: config.runtime.opencodeConfig }); const terminal = createInterface({ input: process.stdin, output: process.stdout, completer: completeSlash, history: [...history].reverse(), historySize: 100 }); let selected = requestedConversation; let createNew = forceNew;
+  const history = await readShellHistory(repository); const terminal = createInterface({ input: process.stdin, output: process.stdout, completer: completeSlash, history: [...history].reverse(), historySize: 100 }); let service: Awaited<ReturnType<typeof ensureOpencodeService>> | undefined; let selected = requestedConversation; let createNew = forceNew;
   const remember = async (value: string) => { const safe = redact(value, [process.env[config.apiKeyEnv] ?? ""], config.security.redactPatterns); history.push(String(safe)); await writeShellHistory(repository, history); };
-  process.stdout.write(`Local Agent — ${repository}\nOpenCode: ${service.owned ? "started for this shell" : "reusing healthy service"} (${service.url})\nType /help for commands. Plain text starts a workflow turn.\n`);
   try {
+    await ensureHarnessIgnored(repository); try { await ensureRepositoryBaseline(repository); } catch (error) { if (!(error instanceof UnbornRepositoryDirtyError)) throw error; const shown = error.files.slice(0, 10).join(", "); const suffix = error.files.length > 10 ? ` and ${error.files.length - 10} more` : ""; const answer = (await terminal.question(`This repository has no commits and ${error.files.length} uncommitted path(s): ${shown}${suffix}. Create the initial commit with all current files? [y/N] `)).trim().toLowerCase(); if (answer !== "y" && answer !== "yes") throw error; const baseline = await ensureRepositoryBaseline(repository, true); process.stdout.write(`Initial repository baseline created: ${baseline.commit}\n`); }
+    service = await ensureOpencodeService({ baseUrl: config.runtime.opencodeUrl, configFile: config.runtime.opencodeConfig }); process.stdout.write(`Local Agent — ${repository}\nOpenCode: ${service.owned ? "started for this shell" : "reusing healthy service"} (${service.url})\nType /help for commands. Plain text starts a workflow turn.\n`);
     while (true) {
       const input = (await terminal.question("you> ")).trim(); if (!input) continue; await remember(input); let command;
       try { command = parseSlashCommand(input); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); continue; }
@@ -72,7 +73,7 @@ async function interactiveShell(repository: string, config: Awaited<ReturnType<t
         else if (command.name === "exit") { const current = await readConversation(repository, selected).catch(() => undefined); if (current?.state.activeRunId) { const run = await optionalRun(repository, current.state.activeRunId); if (run?.status === "active") { process.stderr.write(`Run ${run.runId} is active; use /pause and wait for cleanup before /exit.\n`); continue; } } break; }
       } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); }
     }
-  } finally { terminal.close(); await stopLocalModel(repository, config.runtime).catch((error) => process.stderr.write(`Model cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)); await service.close(); }
+  } finally { terminal.close(); await stopLocalModel(repository, config.runtime).catch((error) => process.stderr.write(`Model cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)); await service?.close(); }
 }
 
 program.command("regression-proof").description("Run a configured test against repaired and defective checkpoints").argument("<command>").argument("[args...]").action(async (command, args) => { process.stdout.write(`${JSON.stringify(await runGitRegressionAdapter(process.cwd(), command, args))}\n`); });
