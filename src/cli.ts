@@ -22,6 +22,8 @@ import { parseProgressMode, ProgressReporter, type ProgressMode } from "./teleme
 import { ensureOpencodeService } from "./opencode/service.js";
 import { completeSlash, parseSlashCommand, routePlainInput, shellHelp } from "./interactive/commands.js";
 import { askLocal } from "./interactive/ask.js";
+import { startFocusedFix } from "./workflow/fix.js";
+import { resolveFileReferences } from "./input/file-references.js";
 import { readShellHistory, writeShellHistory } from "./interactive/history.js";
 import { redact } from "./telemetry/redact.js";
 import { ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, UnbornRepositoryDirtyError } from "./git/workspace.js";
@@ -56,6 +58,7 @@ async function interactiveShell(repository: string, config: Awaited<ReturnType<t
     while (true) {
       const input = (await terminal.question("you> ")).trim(); if (!input) continue; await remember(input); let command;
       try { command = parseSlashCommand(input); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); continue; }
+      if (command?.name === "fix") { try { await prepareWorkflow(); const resolved = await resolveFileReferences(repository, command.args[0]!, config); let reporter: ProgressReporter | undefined; const result = await startFocusedFix({ repository, task: resolved.prompt, config, onCreated(runId, worktree, artifacts) { reporter = new ProgressReporter({ runId, repositoryPath: worktree, artifactPath: artifacts }, "human", process.stderr); reporter.start(); } }); await reporter?.stop(); process.stdout.write(`agent> focused-fix status=${result.status} run=${result.runId} commit=${result.checkpoints.at(-1)?.commit ?? "none"} worktree=${result.repositoryPath}\n`); } catch (error) { process.stderr.write(`fix failed: ${error instanceof Error ? error.message : String(error)}\n`); } continue; }
       const route = command?.name === "ask" ? "ask" : command?.name === "run" ? "run" : command ? undefined : routePlainInput(input); if (route) { try { if (route === "ask") { const question = command?.args[0] ?? input; const controller = new AbortController(); const interrupt = () => controller.abort(new Error("ask interrupted")); process.once("SIGINT", interrupt); process.stderr.write(`[ask] model=${config.models.supervisor.split("/").at(-1)} read-only\n`); try { const result = await askLocal(repository, question, config, command?.web, controller.signal); process.stdout.write(`agent> ${result.answer}\n`); } finally { process.off("SIGINT", interrupt); } } else { await prepareWorkflow(); const task = command?.args[0] ?? input; const result = await conversationalTurn(repository, task, config, selected, createNew); selected = result.conversation.id; createNew = false; process.stdout.write(`agent> turn=${result.conversation.turns.length} status=${result.run.status} conversation=${selected} run=${result.run.runId} commit=${result.run.checkpoints.at(-1)?.commit ?? "none"}\n`); } } catch (error) { process.stderr.write(`${route} failed: ${error instanceof Error ? error.message : String(error)}\n`); } continue; }
       if (!command) continue;
       try {

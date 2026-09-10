@@ -1,9 +1,10 @@
-export const slashCommands = ["ask", "run", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
+export const slashCommands = ["ask", "fix", "run", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
 export type SlashCommandName = (typeof slashCommands)[number];
 export interface SlashCommand { name: SlashCommandName; args: string[]; web?: boolean; }
 
 export const shellHelp = `Slash commands:
   /ask [--web] <text>   one fast read-only answer
+  /fix <task>           focused fix with gates and review
   /run <task>           complete audited engineering workflow
   /help                 show this help
   /status               conversation and latest run status
@@ -31,7 +32,7 @@ function argv(value: string): string[] {
 export function parseSlashCommand(value: string): SlashCommand | undefined {
   const trimmed = value.trim(); if (!trimmed.startsWith("/")) return undefined; const match = trimmed.match(/^\/(\S+)(?:\s+([\s\S]*))?$/); const name = match?.[1];
   if (!name || !slashCommands.includes(name as SlashCommandName)) throw new Error(`unknown slash command: /${name ?? ""}; use /help`);
-  if (name === "ask" || name === "run") { let prompt = (match?.[2] ?? "").trim(); let web = false; if (name === "ask" && /^(?:--web)(?:\s|$)/.test(prompt)) { web = true; prompt = prompt.replace(/^--web(?:\s+|$)/, ""); } if (!prompt) throw new Error(`/${name} requires a prompt`); return { name, args: [prompt], ...(web ? { web } : {}) }; }
+  if (name === "ask" || name === "fix" || name === "run") { let prompt = (match?.[2] ?? "").trim(); let web = false; if (name === "ask" && /^(?:--web)(?:\s|$)/.test(prompt)) { web = true; prompt = prompt.replace(/^--web(?:\s+|$)/, ""); } if (!prompt) throw new Error(`/${name} requires a prompt`); return { name, args: [prompt], ...(web ? { web } : {}) }; }
   const parts = argv(match?.[2] ?? "");
   const noArguments: SlashCommandName[] = ["help", "status", "memory", "files", "worktree", "model", "doctor", "new", "clear", "exit"];
   if (noArguments.includes(name as SlashCommandName) && parts.length) throw new Error(`/${name} does not accept arguments`); if (parts.length > 1) throw new Error(`/${name} accepts at most one run ID`);

@@ -1501,6 +1501,15 @@ Suggested exit codes:
 - AC-097: Remote content is delimited as untrusted data, never executed, and records URL, byte size, content type, and SHA-256 without cookies, ambient authorization, or response-body leakage in errors.
 - AC-098: Ask-mode interruption cancels its OpenCode session, unloads the model, and leaves no mutating run or residual model process.
 
+### Focused fixes
+
+- AC-099: `/fix <task>` creates an isolated auditable worktree and may mutate code, but does not execute the full planning, oracle-design, dual-review, advanced-verification, or final-audit pipeline.
+- AC-100: A focused fix captures baseline gates before editing, uses only the configured implementer model for the edit, creates a checkpoint, and runs every configured required gate afterward.
+- AC-101: A fresh read-only reviewer inspects the focused diff and gate evidence; actionable findings prevent success and receive at most one bounded repair plus repeated gates and review.
+- AC-102: A failed baseline, implementation, checkpoint, required gate, review, repair, interruption, or cleanup leaves persisted state and artifacts and cannot be reported as success.
+- AC-103: `/fix` retains command policy, path scope, secrets redaction, strict single-model residency, final unload, protected-branch, and no-automatic-merge guarantees.
+- AC-104: Plain requests never select focused mutation from probabilistic inference; `/fix` is explicit, while `/ask` remains read-only and `/run` remains the complete workflow.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1730,6 +1739,19 @@ Post-completion correction (2026-09-10): an initialized but commitless Git repos
 - document behavior and stop after Milestone 14 for review.
 
 Implementation result (2026-09-10): AC-092–AC-098 are implemented. Ask mode uses one read-only supervisor session, bounded persisted context, the existing secure file-reference resolver, artifact provenance, cancellation, and final model cleanup. Explicit web mode accepts exactly one HTTP(S) URL, validates DNS and every redirect against local/private/link-local targets, rejects credentials and non-text content, and applies bounded retrieval. `/run` retains the unchanged full audited workflow. Deterministic parser/routing and web-security tests pass alongside the complete regression suite and production build.
+
+### Milestone 15: focused fixes
+
+- add explicit `/fix` without changing conservative automatic routing;
+- create a dedicated isolated run/worktree with persisted baseline and artifacts;
+- require healthy baseline and post-edit configured gates;
+- perform one fresh focused review and at most one repair followed by repeated gates/review;
+- fail closed and clean the model on every error or interruption;
+- retain scope, command, Git, redaction, and single-model policies;
+- test parser, lifecycle, gates/review state, build, and regressions for AC-099–AC-104;
+- document the ask/fix/run decision and stop after Milestone 15 for review.
+
+Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has a dedicated persisted run and isolated worktree, requires passing baseline and post-edit gates, uses the configured implementer for the initial edit, validates paths before checkpoint creation, runs one fresh focused reviewer, permits at most one repair, and repeats gates/review before success. Errors persist a failed state and final cleanup unloads the model. Parser, scope-policy, regression-suite, TypeScript, and production-build validation pass; a live model fix was intentionally not combined with implementation validation and remains the recommended first hands-on check.
 
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 

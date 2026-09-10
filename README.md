@@ -70,6 +70,8 @@ Zero-argument startup, managed OpenCode ownership, slash commands, completion, h
 
 Fast read-only questions, controlled web reads, deterministic routing, and the complete `/run` workflow are documented in [Milestone 14 fast ask](docs/milestone-14-fast-ask.md).
 
+Small mutating changes with baseline, gates, focused review, and one bounded repair are documented in [Milestone 15 focused fix](docs/milestone-15-focused-fix.md).
+
 Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
 
 Persistent multi-prompt sessions, bounded memory, IDE commands, and fail-closed continuation are documented in [Milestone 9 conversations](docs/milestone-9-conversations.md).

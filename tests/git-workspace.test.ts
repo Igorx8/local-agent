@@ -33,6 +33,7 @@ describe("Git workspace", () => {
     expect(checkpoint.changedFiles).toEqual(["implementation.txt"]);
     expect(checkpoint.commit).toHaveLength(40);
   });
+  it("validates focused checkpoint paths before creating a commit", async () => { const repo = await repository(); await writeFile(path.join(repo, "secret.txt"), "deny\n"); const before = (await inspectRepository(repo)).commit; await expect(createCheckpoint(repo, "focused-fix", 0, { allowed: [], denied: ["secret.txt"] })).rejects.toThrow(/denied/); expect((await inspectRepository(repo)).commit).toBe(before); expect((await run("git", ["status", "--porcelain"], { cwd: repo })).stdout).toContain("secret.txt"); });
   it("creates only an empty baseline commit for a truly empty unborn repository", async () => {
     const repo = await mkdtemp(path.join(tmpdir(), "harness-unborn-")); await run("git", ["init", "-b", "main"], { cwd: repo }); await ensureHarnessIgnored(repo); const result = await ensureRepositoryBaseline(repo); expect(result.created).toBe(true); expect(result.commit).toHaveLength(40); expect((await inspectRepository(repo))).toMatchObject({ branch: "main", dirty: false }); expect((await run("git", ["show", "--pretty=format:", "--name-only", "HEAD"], { cwd: repo })).stdout.trim()).toBe(""); expect((await ensureRepositoryBaseline(repo)).created).toBe(false);
   });

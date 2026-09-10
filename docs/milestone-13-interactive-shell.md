@@ -28,6 +28,7 @@ Digite `/help` para consultar a lista dentro do próprio shell.
 
 ```text
 /ask [--web] <text>   resposta rápida e somente leitura
+/fix <task>           correção pequena com gates e revisão
 /run <task>           workflow completo de engenharia
 /help                 ajuda e sintaxe
 /status               conversa e último run

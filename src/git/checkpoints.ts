@@ -1,6 +1,7 @@
 import { executeConfigured } from "../tools/executor.js";
 import type { RepositoryIdentity } from "./workspace.js";
 import { currentIdentity } from "./workspace.js";
+import { assertChangedPathsAllowed } from "../tools/scope.js";
 
 export interface Checkpoint { stage: string; iteration: number; commit: string; treeHash: string; createdAt: string; changedFiles: string[]; }
 
@@ -10,7 +11,8 @@ async function checkedGit(cwd: string, args: string[]): Promise<string> {
   return result.stdout.trim();
 }
 
-export async function createCheckpoint(repository: string, stage: string, iteration: number): Promise<Checkpoint> {
+export async function createCheckpoint(repository: string, stage: string, iteration: number, pathPolicy?: { allowed: string[]; denied: string[] }): Promise<Checkpoint> {
+  if (pathPolicy) assertChangedPathsAllowed(await import("./workspace.js").then(({ changedFiles }) => changedFiles(repository)), pathPolicy.allowed, pathPolicy.denied);
   await checkedGit(repository, ["add", "--all"]);
   const staged = await checkedGit(repository, ["diff", "--cached", "--name-only"]);
   if (!staged) throw new Error("checkpoint has no changes");
