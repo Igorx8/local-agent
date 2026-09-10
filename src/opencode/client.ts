@@ -1,4 +1,4 @@
-import { createOpencodeClient, createOpencodeServer, type OpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient, createOpencodeServer, type OpencodeClient, type Config } from "@opencode-ai/sdk";
 
 export interface OpencodeConnection { baseUrl: string; directory: string; }
 
@@ -8,8 +8,8 @@ export function connectOpencode(connection: OpencodeConnection): OpencodeClient 
   return createOpencodeClient({ baseUrl: connection.baseUrl, directory: connection.directory });
 }
 
-export async function startLocalOpencode(port = 4096, signal?: AbortSignal): Promise<{ client: OpencodeClient; close(): void; url: string }> {
-  const server = await createOpencodeServer({ hostname: "127.0.0.1", port, signal });
+export async function startLocalOpencode(port = 4096, signal?: AbortSignal, config?: Config): Promise<{ client: OpencodeClient; close(): void; url: string }> {
+  const server = await createOpencodeServer({ hostname: "127.0.0.1", port, signal, config });
   return { url: server.url, client: createOpencodeClient({ baseUrl: server.url }), close: server.close };
 }
 

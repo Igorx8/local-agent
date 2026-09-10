@@ -1,6 +1,6 @@
 # Local Multi-Agent Engineering Harness
 
-Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–12 are implemented, including persistent workspace conversations, audited isolated runs, strict single-model GPU residency, explicit file references, and live IDE progress.
+Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–13 are implemented, including persistent workspace conversations, audited isolated runs, strict single-model GPU residency, explicit file references, live IDE progress, and a Claude-like interactive shell.
 Milestone 11 operational validation is documented in [docs/milestone-11-operational-validation.md](docs/milestone-11-operational-validation.md).
 
 Para executar o agente em outros projetos pela IDE, consulte [Usando o harness em outros repositórios](docs/using-in-other-repositories.md).
@@ -33,6 +33,15 @@ harness status
 harness logs <run-id> --follow
 ```
 
+For the simplest interactive experience, the convenience command manages OpenCode when necessary and opens the current workspace directly:
+
+```fish
+cd /path/to/project
+local-agent
+```
+
+Type normal requests or `/help`; no harness subcommand is required inside this shell.
+
 `run` is the default command, `--repo` defaults to the containing Git root, and an inline task replaces the requirement-file ceremony. The first command creates a conversation; later `run` or `continue` commands select the latest conversation in that Git workspace unless `--new` or `--conversation <id>` is supplied. `chat` provides a multi-prompt TTY loop with `/status`, `/memory`, and `/exit`. Existing explicit usage remains supported with `harness run --repo /path --requirements requirements.md --config harness.yaml`. Configuration discovery checks `--config`, `HARNESS_CONFIG`, `.agent-harness/harness.yaml`, `config/harness.yaml`, and finally the packaged local configuration, in that order.
 
 Conversation memory survives terminal and IDE restarts under `.agent-harness/conversations/<conversation-id>/`. It is bounded and deterministically compacted; it is not an indefinitely retained model chat session. Every prompt still creates a fresh audited run and fresh role/reviewer sessions. A successful next turn starts from the exact commit produced by the previous turn, in a new isolated worktree. The command prints that worktree path so it can be opened in the IDE. No conversation turn is merged into the project's default branch automatically.
@@ -56,6 +65,8 @@ Context accounting, deterministic Markdown handoffs, semantic abstraction bounda
 Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage are documented in [Milestone 7 visual feedback](docs/milestone-7-visual-feedback.md).
 
 Explicit `@arquivo` references, security limits, Fish quoting, and immediate human/JSONL progress are documented in [Milestone 12 file references and progress](docs/milestone-12-file-references-and-progress.md).
+
+Zero-argument startup, managed OpenCode ownership, slash commands, completion, history, and cleanup are documented in [Milestone 13 interactive shell](docs/milestone-13-interactive-shell.md).
 
 Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
 

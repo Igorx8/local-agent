@@ -14,6 +14,7 @@ export const harnessConfigSchema = z.object({
   version: z.literal(1),
   runtime: z.object({
     opencodeUrl: z.string().url().default("http://127.0.0.1:4096"),
+    opencodeConfig: z.string().min(1).optional(),
     llamaUrl: z.string().url().default("http://127.0.0.1:8080"),
     modelStrategy: z.enum(["router", "process"]).default("process"),
     modelStartupTimeoutMs: z.number().int().positive().default(600_000),
@@ -72,6 +73,7 @@ export type HarnessConfig = z.infer<typeof harnessConfigSchema>;
 export async function loadConfig(file: string): Promise<HarnessConfig> {
   const configFile = path.resolve(file); const raw = YAML.parse(await readFile(configFile, "utf8"));
   for (const key of ["modelRegistry", "routerPreset"] as const) if (typeof raw[key] === "string" && !path.isAbsolute(raw[key])) { const candidates = [path.resolve(raw[key]), path.resolve(path.dirname(configFile), raw[key]), path.resolve(path.dirname(configFile), "..", raw[key])]; for (const candidate of candidates) try { await access(candidate); raw[key] = candidate; break; } catch { /* resolved path is validated by its consumer */ } }
+  if (typeof raw.runtime?.opencodeConfig === "string" && !path.isAbsolute(raw.runtime.opencodeConfig)) { const candidates = [path.resolve(raw.runtime.opencodeConfig), path.resolve(path.dirname(configFile), raw.runtime.opencodeConfig), path.resolve(path.dirname(configFile), "..", raw.runtime.opencodeConfig)]; for (const candidate of candidates) try { await access(candidate); raw.runtime.opencodeConfig = candidate; break; } catch { /* validated when the managed service starts */ } }
   const config = harnessConfigSchema.parse(raw);
   const registry = await loadModelRegistry(config.modelRegistry);
   for (const role of agentRoles) {

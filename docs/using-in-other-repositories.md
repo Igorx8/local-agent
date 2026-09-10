@@ -2,6 +2,17 @@
 
 O `harness` pode ser executado em qualquer projeto pessoal versionado com Git. Não é necessário copiar o código do agente para cada projeto.
 
+## Uso mais simples: shell interativo
+
+Entre no projeto pelo terminal Fish da IDE e execute apenas:
+
+```fish
+cd /caminho/do/seu/projeto
+local-agent
+```
+
+O shell detecta o Git workspace e mostra `/help` com todos os comandos. Mensagens comuns iniciam turns; `@arquivo` anexa arquivos; Tab completa slash commands. Ele reutiliza um OpenCode saudável ou inicia e encerra uma instância própria usando a configuração local. Portanto, a seção manual abaixo é necessária apenas para quem prefere manter o serviço compartilhado ou usar os comandos não interativos.
+
 ## Iniciar o serviço local
 
 Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.

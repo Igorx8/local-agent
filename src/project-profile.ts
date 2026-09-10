@@ -44,6 +44,8 @@ export async function initializeProjectConfig(root: string, source: string, requ
   const raw = YAML.parse(await readFile(source, "utf8"));
   raw.modelRegistry = path.resolve(path.dirname(source), "models.local.yaml");
   raw.routerPreset = path.resolve(path.dirname(source), "models.local.ini");
+  raw.runtime ??= {};
+  raw.runtime.opencodeConfig = path.resolve(path.dirname(source), "opencode.local.json");
   raw.quality = detected.quality;
   raw.verification ??= {};
   raw.verification.commands ??= {};

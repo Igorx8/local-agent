@@ -1,6 +1,7 @@
 version: 1
 runtime:
   opencodeUrl: http://127.0.0.1:4096
+  opencodeConfig: ./config/opencode.local.json
   llamaUrl: http://127.0.0.1:8080
   # Whole-process isolation is the safe default for machines that cannot keep
   # both large models resident. Router mode remains an explicit opt-in.

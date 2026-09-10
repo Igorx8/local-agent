@@ -1704,6 +1704,8 @@ Implementation result (2026-09-10): AC-069–AC-077 pass deterministically. `run
 
 Milestone 13 must retain all prior single-model residency, conversation, path-security, interruption, and no-automatic-merge guarantees. Starting the convenience shell does not authorize background daemons that outlive an owned interactive session.
 
+Implementation result (2026-09-10): AC-084–AC-091 pass deterministically. The packaged `local-agent` executable selects the current Git workspace and opens the interactive shell with no subcommand. It reuses a healthy OpenCode endpoint or starts an owned SDK server with the explicit local OpenCode configuration, verifies readiness, and closes only owned service state. Plain prompts reuse the bounded conversation workflow, `@file` handling, isolated worktrees, live progress, cooperative interruption, and final model cleanup. Every documented slash command is parsed locally as argv data; unknown/malformed commands cannot start inference. Read-only views omit prompt and referenced-file contents. Private bounded history and slash completion are implemented. TypeScript, full tests, production build, Fish CLI entry/help, and installation validation pass. Milestone 13 is complete and stops here for review.
+
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
