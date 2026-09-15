@@ -1,10 +1,10 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight } from "../src/git/workspace.js";
+import { createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight, publishCheckpoint } from "../src/git/workspace.js";
 import { createCheckpoint } from "../src/git/checkpoints.js";
 
 const run = promisify(execFile);
@@ -32,6 +32,17 @@ describe("Git workspace", () => {
     const checkpoint = await createCheckpoint(worktree, "implementation", 0);
     expect(checkpoint.changedFiles).toEqual(["implementation.txt"]);
     expect(checkpoint.commit).toHaveLength(40);
+  });
+  it("publishes an approved checkpoint as uncommitted changes in the current working tree", async () => {
+    const repo = await repository(); await ensureHarnessIgnored(repo); const baseline = (await inspectRepository(repo)).commit; const worktree = `${repo}-publish-worktree`;
+    await createWorktree(repo, path.dirname(repo), worktree, "agent/publish-test"); await writeFile(path.join(worktree, "generated.md"), "approved\n"); const checkpoint = await createCheckpoint(worktree, "implementation", 0);
+    const result = await publishCheckpoint(repo, baseline, checkpoint.commit, path.join(repo, ".agent-harness", "runs", "publish", "workspace.patch"));
+    expect(result.files).toEqual(["generated.md"]); expect((await readFile(path.join(repo, "generated.md"), "utf8"))).toBe("approved\n"); expect((await inspectRepository(repo)).commit).toBe(baseline); expect((await inspectRepository(repo)).dirty).toBe(true);
+  });
+  it("refuses publication when the current working tree changed during the run", async () => {
+    const repo = await repository(); await ensureHarnessIgnored(repo); const baseline = (await inspectRepository(repo)).commit; const worktree = `${repo}-blocked-publish-worktree`;
+    await createWorktree(repo, path.dirname(repo), worktree, "agent/blocked-publish-test"); await writeFile(path.join(worktree, "generated.md"), "approved\n"); const checkpoint = await createCheckpoint(worktree, "implementation", 0); await writeFile(path.join(repo, "user-work.txt"), "preserve\n");
+    await expect(publishCheckpoint(repo, baseline, checkpoint.commit, path.join(repo, ".agent-harness", "runs", "blocked", "workspace.patch"))).rejects.toThrow(/working tree changed/); await expect(readFile(path.join(repo, "generated.md"), "utf8")).rejects.toThrow(); expect(await readFile(path.join(repo, "user-work.txt"), "utf8")).toBe("preserve\n");
   });
   it("validates focused checkpoint paths before creating a commit", async () => { const repo = await repository(); await writeFile(path.join(repo, "secret.txt"), "deny\n"); const before = (await inspectRepository(repo)).commit; await expect(createCheckpoint(repo, "focused-fix", 0, { allowed: [], denied: ["secret.txt"] })).rejects.toThrow(/denied/); expect((await inspectRepository(repo)).commit).toBe(before); expect((await run("git", ["status", "--porcelain"], { cwd: repo })).stdout).toContain("secret.txt"); });
   it("creates only an empty baseline commit for a truly empty unborn repository", async () => {

@@ -54,3 +54,22 @@ export async function changedFiles(repository: string): Promise<string[]> {
   const status = await git(repository, ["status", "--porcelain"]);
   return status ? status.split("\n").map((line) => line.slice(3).split(" -> ").at(-1) ?? "").filter(Boolean) : [];
 }
+
+export interface PublishedCheckpoint { commit: string; files: string[]; patchFile: string; }
+
+export async function publishCheckpoint(repository: string, expectedBaseCommit: string, checkpointCommit: string, patchFile: string): Promise<PublishedCheckpoint> {
+  const before = await inspectRepository(repository);
+  if (before.commit !== expectedBaseCommit) throw new Error(`repository HEAD changed during the run: expected ${expectedBaseCommit}, found ${before.commit}`);
+  if (before.dirty) throw new Error("repository working tree changed during the run; isolated checkpoint was preserved and nothing was published");
+  const ancestry = await executeConfigured({ command: "git", args: ["merge-base", "--is-ancestor", expectedBaseCommit, checkpointCommit], required: true, timeoutMs: 30_000 }, { cwd: repository });
+  if (ancestry.exitCode !== 0) throw new Error("checkpoint is not descended from the repository baseline");
+  const destination = path.resolve(patchFile); await mkdir(path.dirname(destination), { recursive: true });
+  await git(repository, ["diff", "--binary", `--output=${destination}`, expectedBaseCommit, checkpointCommit, "--"]);
+  await git(repository, ["apply", "--check", destination]);
+  const unchanged = await inspectRepository(repository);
+  if (unchanged.commit !== expectedBaseCommit || unchanged.dirty) throw new Error("repository changed while checkpoint publication was being prepared; nothing was published");
+  await git(repository, ["apply", destination]);
+  const files = await changedFiles(repository);
+  if (!files.length) throw new Error("checkpoint publication produced no working-tree changes");
+  return { commit: checkpointCommit, files, patchFile: destination };
+}

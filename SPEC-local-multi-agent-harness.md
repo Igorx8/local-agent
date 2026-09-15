@@ -1510,6 +1510,12 @@ Suggested exit codes:
 - AC-103: `/fix` retains command policy, path scope, secrets redaction, strict single-model residency, final unload, protected-branch, and no-automatic-merge guarantees.
 - AC-104: Plain requests never select focused mutation from probabilistic inference; `/fix` is explicit, while `/ask` remains read-only and `/run` remains the complete workflow.
 
+### Current-worktree publication
+
+- AC-105: After a successful focused fix, the reviewed checkpoint is materialized as uncommitted changes in the repository working tree from which `local-agent` was started.
+- AC-106: Publication never merges, commits, resets, or changes the current branch; the isolated branch and checkpoint remain the auditable source of the patch.
+- AC-107: Publication fails closed before modifying the repository if its HEAD or working tree changed after preflight, preserving both user work and the isolated checkpoint.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1752,6 +1758,16 @@ Implementation result (2026-09-10): AC-092–AC-098 are implemented. Ask mode us
 - document the ask/fix/run decision and stop after Milestone 15 for review.
 
 Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has a dedicated persisted run and isolated worktree, requires passing baseline and post-edit gates, uses the configured implementer for the initial edit, validates paths before checkpoint creation, runs one fresh focused reviewer, permits at most one repair, and repeats gates/review before success. Errors persist a failed state and final cleanup unloads the model. Parser, scope-policy, regression-suite, TypeScript, and production-build validation pass; a live model fix was intentionally not combined with implementation validation and remains the recommended first hands-on check.
+
+### Milestone 16: current-worktree publication
+
+- preserve isolated implementation, gates, review, checkpoint, and recovery evidence;
+- after `/fix` succeeds, generate a patch from the exact preflight commit to the approved checkpoint;
+- validate the patch and recheck the repository HEAD and cleanliness before applying it;
+- materialize the patch as uncommitted changes in the current working tree, without merge, commit, reset, or branch movement;
+- persist the exact publication patch and metadata with the run artifacts;
+- reject concurrent user changes without overwriting them;
+- test successful publication, HEAD preservation, and concurrent-change refusal for AC-105–AC-107.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 
