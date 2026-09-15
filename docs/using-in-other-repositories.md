@@ -29,6 +29,8 @@ Inferências longas são submetidas de forma assíncrona e acompanhadas até a s
 
 O `/fix` usa agentes próprios com no máximo oito passos e encerra uma inferência focada que não termine em três minutos. Timeout não é repetido automaticamente; falhas transitórias podem receber no máximo uma nova tentativa. Isso impede que uma tarefa pequena ocupe dezenas de minutos sem produzir uma alteração.
 
+O progresso incremental distingue carregamento do modelo, tool calls, arquivos alterados e tokens concluídos por passo. Entradas e conteúdos dos arquivos não são impressos. Durante o run, procure as alterações no `worktree` mostrado na primeira linha; o diretório principal permanece intocado até você integrar manualmente o checkpoint.
+
 ## Iniciar o serviço local
 
 Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.

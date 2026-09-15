@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { HarnessConfig } from "../config.js";
 import type { ModelLifecycle } from "../models/types.js";
-import { parseModelAlias, type OpencodeSessions } from "../opencode/sessions.js";
+import { parseModelAlias, type OpencodeSessions, type SessionActivity } from "../opencode/sessions.js";
 import type { AgentRole } from "../opencode/agents.js";
 import type { TokenObservation } from "../context/budget.js";
 
-export interface RoleInvocation { role: AgentRole; prompt: string; iteration: number; artifactReferences: string[]; freshSession: true; agent?: string; timeoutMs?: number; }
+export interface RoleInvocation { role: AgentRole; prompt: string; iteration: number; artifactReferences: string[]; freshSession: true; agent?: string; timeoutMs?: number; onActivity?: (activity: SessionActivity) => Promise<void> | void; }
 export interface RoleResult<T> { value: T; sessionID: string; raw: string; context?: TokenObservation; telemetry?: { alias: string; requestDurationMs: number; tokensPerSecond?: number }; }
 export interface RoleRunner { invoke<T>(invocation: RoleInvocation, schema: z.ZodType<T>): Promise<RoleResult<T>>; }
 
@@ -23,7 +23,7 @@ function phaseError(phase: string, error: unknown): Error {
 }
 
 export class OpenCodeRoleRunner implements RoleRunner {
-  constructor(private readonly sessions: OpencodeSessions, private readonly models: ModelLifecycle, private readonly config: HarnessConfig, private readonly onSession?: (role: AgentRole, sessionID: string) => Promise<void> | void, private readonly contextWindows: Record<string, number> = {}, private readonly shutdownSignal?: AbortSignal) {}
+  constructor(private readonly sessions: OpencodeSessions, private readonly models: ModelLifecycle, private readonly config: HarnessConfig, private readonly onSession?: (role: AgentRole, sessionID: string) => Promise<void> | void, private readonly contextWindows: Record<string, number> = {}, private readonly shutdownSignal?: AbortSignal, private readonly onActivity?: (role: AgentRole, activity: SessionActivity) => Promise<void> | void) {}
   async invoke<T>(invocation: RoleInvocation, schema: z.ZodType<T>): Promise<RoleResult<T>> {
     const configured = this.config.models[invocation.role];
     const selection = parseModelAlias(configured); const alias = selection.modelID;
@@ -36,7 +36,8 @@ export class OpenCodeRoleRunner implements RoleRunner {
     const effectivePrompt = structuredPrompt(invocation.prompt, schema);
     try {
       await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: invocation.agent ?? agentNames[invocation.role], model: selection, asynchronous: true, signal: this.shutdownSignal });
-      await this.sessions.waitUntilIdle(session.id, invocation.timeoutMs ?? this.config.workflow.inferenceTimeoutMs, this.shutdownSignal);
+      const activity = invocation.onActivity ?? (this.onActivity ? (value: SessionActivity) => this.onActivity!(invocation.role, value) : undefined);
+      await this.sessions.waitUntilIdle(session.id, invocation.timeoutMs ?? this.config.workflow.inferenceTimeoutMs, this.shutdownSignal, activity);
     } catch (error) {
       await this.sessions.abort(session.id).catch(() => false);
       throw phaseError("asynchronous prompt/completion", error);

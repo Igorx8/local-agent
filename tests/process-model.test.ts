@@ -22,8 +22,15 @@ describe("explicit process model lifecycle", () => {
 
   it("recovers an alias whose prior process exited and tolerates ESRCH during cleanup", async () => {
     let launches = 0; let healthy = false;
-    const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { one: { command: "llama-server", args: ["one"] } }, startupTimeoutMs: 100, shutdownTimeoutMs: 100, async releaseProbe() { return true; }, fetcher: async (input) => new Response(JSON.stringify(new URL(String(input)).pathname === "/health" ? { status: "ok" } : { data: healthy ? [{ id: "one" }] : [] }), { status: healthy ? 200 : 503 }), launcher() { launches++; healthy = true; return { pid: 42 + launches, exited: Promise.resolve({ code: 1, signal: null }), stop() { healthy = false; const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; } }; } });
+    const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { one: { command: "llama-server", args: ["one"] } }, startupTimeoutMs: 100, shutdownTimeoutMs: 100, async releaseProbe() { return true; }, fetcher: async (input) => new Response(JSON.stringify(new URL(String(input)).pathname === "/health" ? { status: "ok" } : { data: healthy ? [{ id: "one" }] : [] }), { status: healthy ? 200 : 503 }), launcher() { launches++; healthy = true; let resolve!: (result: { code: number | null; signal: NodeJS.Signals | null }) => void; const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done) => resolve = done); return { pid: 42 + launches, exited, stop() { healthy = false; resolve({ code: 1, signal: null }); const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; } }; } });
     await manager.ensureModel("one"); healthy = false; await manager.ensureModel("one");
     expect(launches).toBe(2); await expect(manager.stop()).resolves.toMatchObject({ state: "stopped" });
+  });
+
+  it("fails fast when every launched model process exits before becoming ready", async () => {
+    let launches = 0; const started = Date.now();
+    const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { one: { command: "llama-server", args: ["one"] } }, startupTimeoutMs: 60_000, shutdownTimeoutMs: 100, async releaseProbe() { return true; }, fetcher: async () => new Response("down", { status: 503 }), launcher() { launches++; return { pid: 90 + launches, exited: Promise.resolve({ code: 1, signal: null }), stop() {} }; } });
+    await expect(manager.ensureModel("one")).rejects.toThrow("model process exited before ready");
+    expect(launches).toBe(2); expect(Date.now() - started).toBeLessThan(1_000);
   });
 });

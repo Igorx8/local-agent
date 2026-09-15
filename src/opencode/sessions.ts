@@ -5,6 +5,7 @@ import { responseData } from "./client.js";
 export interface ModelSelection { providerID: string; modelID: string; }
 export interface PromptRequest { sessionID: string; text: string; agent: string; model: ModelSelection; system?: string; tools?: Record<string, boolean>; asynchronous?: boolean; signal?: AbortSignal; }
 export interface TokenUsage { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number; provenance: "opencode_message_metadata"; }
+export type SessionActivity = { type: "tool"; tool: string; status: string } | { type: "files"; files: string[] } | { type: "step"; inputTokens: number; outputTokens: number; reasoningTokens: number };
 
 export function parseModelAlias(value: string): ModelSelection {
   const separator = value.indexOf("/");
@@ -31,14 +32,24 @@ export class OpencodeSessions {
 
   async abort(sessionID: string): Promise<boolean> { return responseData(await this.client.session.abort({ path: { id: sessionID }, query: { directory: this.directory } })); }
   async statuses(signal?: AbortSignal): Promise<Record<string, SessionStatus>> { return responseData(await this.client.session.status({ query: { directory: this.directory }, signal })); }
-  async waitUntilIdle(sessionID: string, timeoutMs: number, signal?: AbortSignal): Promise<void> {
+  async waitUntilIdle(sessionID: string, timeoutMs: number, signal?: AbortSignal, onActivity?: (activity: SessionActivity) => Promise<void> | void): Promise<void> {
     const timeout = AbortSignal.timeout(timeoutMs);
     const combined = signal ? AbortSignal.any([timeout, signal]) : timeout;
     let observedActive = false;
+    const observedParts = new Map<string, string>();
     try {
       while (true) {
         combined.throwIfAborted();
         const status = (await this.statuses(combined))[sessionID];
+        if (onActivity) {
+          const messages = await this.messages(sessionID);
+          for (const part of messages.flatMap((message) => message.parts)) {
+            if (part.sessionID !== sessionID) continue;
+            if (part.type === "tool") { const value = part.state.status; if (observedParts.get(part.id) !== value) { observedParts.set(part.id, value); await onActivity({ type: "tool", tool: part.tool, status: value }); } }
+            else if (part.type === "patch" && !observedParts.has(part.id)) { observedParts.set(part.id, "seen"); await onActivity({ type: "files", files: part.files }); }
+            else if (part.type === "step-finish" && !observedParts.has(part.id)) { observedParts.set(part.id, "seen"); await onActivity({ type: "step", inputTokens: part.tokens.input, outputTokens: part.tokens.output, reasoningTokens: part.tokens.reasoning }); }
+          }
+        }
         if (status?.type === "busy" || status?.type === "retry") observedActive = true;
         else if (status?.type === "idle" || (observedActive && status === undefined)) return;
         else if (status === undefined) {

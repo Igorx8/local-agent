@@ -24,6 +24,19 @@ describe("OpenCode asynchronous session completion", () => {
     await expect(sessions.prompt({ sessionID: "ses-1", text: "work", agent: "implementer", model: { providerID: "llama.cpp", modelID: "qwen" }, asynchronous: true })).resolves.toBeUndefined();
   });
 
+  it("streams bounded tool, file and token activity while polling", async () => {
+    const status = vi.fn().mockResolvedValueOnce({ data: { "ses-1": { type: "busy" } } }).mockResolvedValueOnce({ data: { "ses-1": { type: "idle" } } });
+    const parts = [
+      { id: "tool-1", sessionID: "ses-1", messageID: "msg-1", type: "tool", tool: "write", state: { status: "running", input: {}, time: { start: 1 } } },
+      { id: "patch-1", sessionID: "ses-1", messageID: "msg-1", type: "patch", hash: "abc", files: ["tasks/README.md"] },
+      { id: "step-1", sessionID: "ses-1", messageID: "msg-1", type: "step-finish", reason: "tool-calls", cost: 0, tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } } }
+    ];
+    const messages = vi.fn().mockResolvedValue({ data: [{ info: { role: "assistant" }, parts }] }); const activity: unknown[] = [];
+    const sessions = new OpencodeSessions({ session: { status, messages } } as never, "/workspace");
+    await sessions.waitUntilIdle("ses-1", 2_000, undefined, (item) => { activity.push(item); });
+    expect(activity).toEqual([{ type: "tool", tool: "write", status: "running" }, { type: "files", files: ["tasks/README.md"] }, { type: "step", inputTokens: 100, outputTokens: 20, reasoningTokens: 0 }]);
+  });
+
   it("accepts disappearance from the active status map after observing activity", async () => {
     const status = vi.fn()
       .mockResolvedValueOnce({ data: { "ses-1": { type: "busy" } } })

@@ -59,8 +59,10 @@ export class ProcessModelManager implements ModelLifecycle {
     const stoppedPrevious = await this.stopProcess(); if (stoppedPrevious && (this.options.restartCooldownMs ?? 0) > 0) await this.sleeper(this.options.restartCooldownMs!);
     for (let attempt = 0; attempt < 2; attempt++) {
       this.current = { alias, state: "loading" }; this.process = this.launcher(command); this.current.pid = this.process.pid;
+      let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined; let launchError: unknown;
+      void this.process.exited.then((result) => { exited = result; }, (error) => { launchError = error; });
       try {
-        await pollUntil(() => this.ready(alias), this.options.startupTimeoutMs ?? 120_000);
+        await pollUntil(async () => { if (launchError) throw launchError; if (exited) throw new Error(`model process exited before ready: code=${exited.code ?? "none"} signal=${exited.signal ?? "none"}`); return this.ready(alias); }, this.options.startupTimeoutMs ?? 120_000);
         return this.current = { alias, state: "healthy", pid: this.process.pid };
       } catch (error) {
         await this.stopProcess();
