@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { assertModelAdmission } from "../src/models/resources.js";
+import { assertModelAdmission, parseLlamaPredictedTokens } from "../src/models/resources.js";
 import { ProcessModelManager } from "../src/models/process-adapter.js";
 
 const limits = { requiredRamMiB: 20_000, maxSwapUsedMiB: 1024, maxVramUsedMiB: 2048, blockForeignCuda: true };
@@ -23,5 +23,11 @@ describe("model resource admission", () => {
     const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { coder: { command: "llama", args: ["serve"] } }, launcher, admissionProbe: async () => { throw new Error("unsafe host"); } });
     await expect(manager.ensureModel("coder")).rejects.toThrow("unsafe host");
     expect(launcher).not.toHaveBeenCalled();
+  });
+
+  it("parses the installed llama.cpp Prometheus token counter contract", () => {
+    expect(parseLlamaPredictedTokens("# HELP x\nllamacpp:tokens_predicted_total 2407\n")).toBe(2407);
+    expect(parseLlamaPredictedTokens('llamacpp:tokens_predicted_total{model="coder"} 42\n')).toBe(42);
+    expect(parseLlamaPredictedTokens("unrelated_metric 1\n")).toBeUndefined();
   });
 });

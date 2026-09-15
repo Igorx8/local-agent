@@ -45,3 +45,12 @@ export function assertModelAdmission(alias: string, snapshot: ModelAdmissionSnap
   if (limits.blockForeignCuda && foreign.length) reasons.push(`foreign CUDA process(es): ${foreign.map((item) => `${item.name}(${item.pid})`).join(", ")}`);
   if (reasons.length) throw new Error(`model admission blocked for ${alias}: ${reasons.join("; ")}. Stop heavy workloads or adjust explicit runtime thresholds.`);
 }
+
+export function parseLlamaPredictedTokens(metrics: string): number | undefined {
+  const match = metrics.match(/^llamacpp:tokens_predicted_total(?:\{[^}]*\})?\s+([0-9]+(?:\.[0-9]+)?)/m);
+  if (!match) return undefined; const value = Number(match[1]); return Number.isFinite(value) ? value : undefined;
+}
+
+export async function llamaPredictedTokens(baseUrl: string, apiKey?: string, fetcher: typeof fetch = fetch): Promise<number | undefined> {
+  try { const response = await fetcher(new URL("/metrics", baseUrl), { headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(3000) }); if (!response.ok) return undefined; return parseLlamaPredictedTokens(await response.text()); } catch { return undefined; }
+}

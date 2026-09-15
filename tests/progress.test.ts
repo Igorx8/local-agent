@@ -17,6 +17,7 @@ describe("bounded CLI progress", () => {
     expect(formatProgress({ timestamp: new Date().toISOString(), type: "agent.tool", message: "implementer tool write running", data: { role: "implementer", tool: "write", status: "running", input: "secret file contents" } }, "human")).toContain("tool=write");
     const stream = formatProgress({ timestamp: new Date().toISOString(), type: "agent.stream", message: "implementer write input is streaming", data: { role: "implementer", tool: "write", generatedBytes: 4096, input: "secret file contents" } }, "human")!;
     expect(stream).toContain("generatedBytes=4096"); expect(stream).not.toContain("secret");
+    expect(formatProgress({ timestamp: new Date().toISOString(), type: "agent.tokens", message: "generation progressing", data: { role: "implementer", predictedTokens: 512 } }, "human")).toContain("predictedTokens=512");
   });
 
   it("streams newly persisted visible events and can be disabled", async () => {

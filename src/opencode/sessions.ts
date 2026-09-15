@@ -5,7 +5,7 @@ import { responseData } from "./client.js";
 export interface ModelSelection { providerID: string; modelID: string; }
 export interface PromptRequest { sessionID: string; text: string; agent: string; model: ModelSelection; system?: string; tools?: Record<string, boolean>; asynchronous?: boolean; signal?: AbortSignal; }
 export interface TokenUsage { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number; provenance: "opencode_message_metadata"; }
-export type SessionActivity = { type: "tool"; tool: string; status: string } | { type: "stream"; tool: string; generatedBytes: number } | { type: "files"; files: string[] } | { type: "step"; inputTokens: number; outputTokens: number; reasoningTokens: number };
+export type SessionActivity = { type: "tool"; tool: string; status: string } | { type: "stream"; tool: string; generatedBytes: number } | { type: "tokens"; predictedTokens: number } | { type: "files"; files: string[] } | { type: "step"; inputTokens: number; outputTokens: number; reasoningTokens: number };
 
 export function parseModelAlias(value: string): ModelSelection {
   const separator = value.indexOf("/");
@@ -32,18 +32,25 @@ export class OpencodeSessions {
 
   async abort(sessionID: string): Promise<boolean> { return responseData(await this.client.session.abort({ path: { id: sessionID }, query: { directory: this.directory } })); }
   async statuses(signal?: AbortSignal): Promise<Record<string, SessionStatus>> { return responseData(await this.client.session.status({ query: { directory: this.directory }, signal })); }
-  async waitUntilIdle(sessionID: string, timeoutMs: number, signal?: AbortSignal, onActivity?: (activity: SessionActivity) => Promise<void> | void, idleTimeoutMs = timeoutMs): Promise<void> {
+  async waitUntilIdle(sessionID: string, timeoutMs: number, signal?: AbortSignal, onActivity?: (activity: SessionActivity) => Promise<void> | void, idleTimeoutMs = timeoutMs, progressProbe?: () => Promise<number | undefined>): Promise<void> {
     const timeout = AbortSignal.timeout(timeoutMs);
     const combined = signal ? AbortSignal.any([timeout, signal]) : timeout;
     let observedActive = false;
     const observedParts = new Map<string, string>();
     const streamBuckets = new Map<string, number>();
+    let lastPredictedTokens: number | undefined; let reportedTokenBucket = -1;
     let lastProgressAt = Date.now();
     try {
       while (true) {
         combined.throwIfAborted();
         if (Date.now() - lastProgressAt >= idleTimeoutMs) throw new Error(`OpenCode session ${sessionID} made no progress for ${idleTimeoutMs}ms`);
         const status = (await this.statuses(combined))[sessionID];
+        const predictedTokens = await progressProbe?.();
+        if (predictedTokens !== undefined) {
+          if (lastPredictedTokens !== undefined && predictedTokens > lastPredictedTokens) lastProgressAt = Date.now();
+          lastPredictedTokens = predictedTokens; const bucket = Math.floor(predictedTokens / 128);
+          if (bucket > reportedTokenBucket) { reportedTokenBucket = bucket; await onActivity?.({ type: "tokens", predictedTokens }); }
+        }
         if (onActivity || idleTimeoutMs < timeoutMs) {
           const messages = await this.messages(sessionID);
           for (const part of messages.flatMap((message) => message.parts)) {

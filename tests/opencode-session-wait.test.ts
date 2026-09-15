@@ -61,6 +61,14 @@ describe("OpenCode asynchronous session completion", () => {
     await expect(sessions.waitUntilIdle("ses-1", 2_000, undefined, () => undefined, 20)).rejects.toThrow("made no progress for 20ms");
   });
 
+  it("renews inactivity from llama.cpp token progress when OpenCode buffers tool input", async () => {
+    const status = vi.fn().mockResolvedValueOnce({ data: { "ses-1": { type: "busy" } } }).mockResolvedValueOnce({ data: { "ses-1": { type: "busy" } } }).mockResolvedValueOnce({ data: { "ses-1": { type: "idle" } } });
+    const messages = vi.fn().mockResolvedValue({ data: [] }); const progress = vi.fn().mockResolvedValueOnce(100).mockResolvedValueOnce(180).mockResolvedValueOnce(260); const activity: unknown[] = [];
+    const sessions = new OpencodeSessions({ session: { status, messages } } as never, "/workspace");
+    await expect(sessions.waitUntilIdle("ses-1", 2_000, undefined, (item) => { activity.push(item); }, 700, progress)).resolves.toBeUndefined();
+    expect(activity).toContainEqual({ type: "tokens", predictedTokens: 260 });
+  });
+
   it("fails with a bounded diagnostic when the session never completes", async () => {
     const status = vi.fn().mockResolvedValue({ data: { "ses-1": { type: "busy" } } });
     const sessions = new OpencodeSessions({ session: { status } } as never, "/workspace");
