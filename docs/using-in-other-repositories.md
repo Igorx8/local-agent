@@ -25,6 +25,8 @@ Perguntas simples usam uma inferência somente leitura. Use `/ask` para forçar 
 
 O `/fix` pode repetir uma falha transitória de inferência local conforme `workflow.inferenceRetries`. O progresso informa a nova tentativa; se o OpenCode não estiver mais saudável, o turno para imediatamente e identifica a fase que falhou.
 
+Se um agente concluir seu trabalho mas responder em prosa ou com JSON incompatível, o harness solicita uma única correção de formato na mesma sessão, com ferramentas de escrita desabilitadas. A implementação e seu checkpoint não são repetidos. Uma segunda resposta inválida falha de forma fechada.
+
 Inferências longas são submetidas de forma assíncrona e acompanhadas até a sessão terminar; um heartbeat `Still working` aparece a cada 30 segundos sem conteúdo do prompt. Use `/fix` somente para uma alteração pequena e localizada. Tarefas que decompõem um plano grande ou criam muitos arquivos pertencem ao `/run`.
 
 O `/fix` usa agentes próprios com no máximo oito passos e encerra uma inferência focada que não termine em três minutos. Timeout não é repetido automaticamente; falhas transitórias podem receber no máximo uma nova tentativa. Isso impede que uma tarefa pequena ocupe dezenas de minutos sem produzir uma alteração.

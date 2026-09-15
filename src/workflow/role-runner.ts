@@ -43,14 +43,26 @@ export class OpenCodeRoleRunner implements RoleRunner {
       await this.sessions.abort(session.id).catch(() => false);
       throw phaseError("asynchronous prompt/completion", error);
     } finally { this.models.endRequest(alias); }
-    let messages;
+    let messages: Awaited<ReturnType<OpencodeSessions["messages"]>>;
     try { messages = await this.sessions.messages(session.id); } catch (error) { throw phaseError("response retrieval", error); }
-    const response = [...messages].reverse().find((message) => message.info.role === "assistant");
-    const raw = response?.parts.filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
+    const responseText = () => [...messages].reverse().find((message) => message.info.role === "assistant")?.parts.filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
+    let raw = responseText(); let value: T;
+    try { value = schema.parse(jsonFromText(raw)); }
+    catch (firstError) {
+      this.models.beginRequest(alias);
+      try {
+        await this.sessions.prompt({ sessionID: session.id, text: `Your previous response did not satisfy the required JSON contract. Return only one valid JSON object matching this exact schema, with no prose or Markdown fences:\n${JSON.stringify(z.toJSONSchema(schema))}`, agent: invocation.agent ?? agentNames[invocation.role], model: selection, tools: { write: false, edit: false, bash: false }, asynchronous: true, signal: this.shutdownSignal });
+        const activity = invocation.onActivity ?? (this.onActivity ? (item: SessionActivity) => this.onActivity!(invocation.role, item) : undefined);
+        await this.sessions.waitUntilIdle(session.id, invocation.timeoutMs ?? this.config.workflow.inferenceTimeoutMs, this.shutdownSignal, activity, invocation.idleTimeoutMs, () => llamaDecodedTokens(this.config.runtime.llamaUrl, process.env[this.config.apiKeyEnv]));
+      } catch (error) { await this.sessions.abort(session.id).catch(() => false); throw phaseError("structured response correction", error); }
+      finally { this.models.endRequest(alias); }
+      try { messages = await this.sessions.messages(session.id); raw = responseText(); value = schema.parse(jsonFromText(raw)); }
+      catch (error) { throw new Error(`OpenCode structured response remained invalid after one correction: ${error instanceof Error ? error.message : String(error)}`, { cause: firstError }); }
+    }
     const exact = this.sessions.latestUsage(messages); const contextWindow = this.contextWindows[alias] ?? 65536;
     const context: TokenObservation = exact ? { latestPromptTokens: exact.input, contextWindow, provenance: "exact", source: exact.provenance } : { latestPromptTokens: Math.ceil(Buffer.byteLength(effectivePrompt, "utf8") / 4), contextWindow, provenance: "estimated", source: "byte_estimate" };
     const requestDurationMs = Math.round(performance.now() - startedAt);
     const tokensPerSecond = exact && requestDurationMs > 0 ? exact.output / (requestDurationMs / 1000) : undefined;
-    return { value: schema.parse(jsonFromText(raw)), sessionID: session.id, raw, context, telemetry: { alias, requestDurationMs, tokensPerSecond } };
+    return { value, sessionID: session.id, raw, context, telemetry: { alias, requestDurationMs, tokensPerSecond } };
   }
 }

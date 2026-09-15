@@ -37,4 +37,16 @@ describe("structured role prompt", () => {
     const runner = new OpenCodeRoleRunner(sessions, model, config);
     await expect(runner.invoke({ role: "implementer", prompt: "fix", iteration: 0, artifactReferences: [], freshSession: true }, z.object({ ok: z.boolean() }))).rejects.toThrow("OpenCode session creation failed: fetch failed");
   });
+
+  it("corrects one invalid structured response in the same session", async () => {
+    const roles = ["supervisor", "planner", "testArchitect", "implementer", "repositoryReviewer", "requirementsReviewer", "validator", "repair", "adversarialVerifier", "auditor"];
+    const config = harnessConfigSchema.parse({ version: 1, runtime: {}, models: Object.fromEntries(roles.map((role) => [role, "llama.cpp/qwen"])), workflow: { autoMerge: false }, context: {}, quality: {} });
+    const prompts: Array<{ text: string; tools?: Record<string, boolean> }> = []; let reads = 0;
+    const message = (text: string) => [{ info: { role: "assistant" }, parts: [{ type: "text", text }] }];
+    const sessions = { create: async () => ({ id: "ses-review" }), prompt: async (request: { text: string; tools?: Record<string, boolean> }) => { prompts.push(request); }, waitUntilIdle: async () => undefined, messages: async () => message(reads++ === 0 ? "CRITICAL - narrative response" : '{"findings":[]}'), latestUsage: () => undefined, abort: async () => true } as unknown as OpencodeSessions;
+    const model = { ensureModel: async () => ({ state: "healthy" }), beginRequest() {}, endRequest() {}, status: () => ({ state: "healthy" }), stop: async () => ({ state: "stopped" }) } as ModelLifecycle;
+    const runner = new OpenCodeRoleRunner(sessions, model, config);
+    await expect(runner.invoke({ role: "repositoryReviewer", prompt: "review", iteration: 0, artifactReferences: [], freshSession: true }, z.object({ findings: z.array(z.unknown()) }))).resolves.toMatchObject({ value: { findings: [] }, sessionID: "ses-review" });
+    expect(prompts).toHaveLength(2); expect(prompts[1]!.text).toContain("previous response did not satisfy"); expect(prompts[1]!.tools).toEqual({ write: false, edit: false, bash: false });
+  });
 });
