@@ -128,6 +128,20 @@ Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda est
 
 O `/fix` permite somente um reparo após a primeira revisão. Em arquivos existentes, esse reparo deve editar apenas os trechos apontados e preservar o restante; se a segunda revisão ainda encontrar um defeito acionável, o run falha fechado e mantém os checkpoints no worktree para inspeção, em vez de iniciar um ciclo indefinido.
 
+## Gate de recursos antes de carregar modelos
+
+Antes de qualquer carga ou troca, o harness confirma que há recursos seguros no host. Por padrão, ele exige RAM disponível igual ao tamanho exato do GGUF mais 4 GiB, no máximo 1 GiB de swap já utilizado, no máximo 2 GiB de VRAM ocupada e nenhum processo CUDA externo. Isso também vale para `harness model start` e `harness model switch`.
+
+Quando alguma condição falhar, nenhum novo modelo é iniciado. A mensagem `model admission blocked` informa as medições que bloquearam a operação. Encerre downloads, descompactações, ComfyUI ou outras cargas pesadas e tente novamente. O harness não encerra processos externos automaticamente. Os limites podem ser ajustados explicitamente em `runtime`, mas reduzi-los enfraquece a proteção:
+
+```yaml
+runtime:
+  modelAdmissionRamReserveMiB: 4096
+  modelAdmissionMaxSwapUsedMiB: 1024
+  modelAdmissionMaxVramUsedMiB: 2048
+  modelAdmissionBlockForeignCuda: true
+```
+
 O primeiro `Ctrl+C` solicita uma pausa cooperativa. Depois que o run estiver pausado e o modelo tiver sido descarregado, use `harness resume RUN_ID` para continuar do último estado consistente.
 
 ## Arquivos criados no projeto

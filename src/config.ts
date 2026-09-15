@@ -21,6 +21,10 @@ export const harnessConfigSchema = z.object({
     modelShutdownTimeoutMs: z.number().int().positive().default(60_000),
     modelRestartCooldownMs: z.number().int().nonnegative().default(2_000),
     modelUnloadVramThresholdMiB: z.number().int().nonnegative().default(2048),
+    modelAdmissionRamReserveMiB: z.number().int().nonnegative().default(4096),
+    modelAdmissionMaxSwapUsedMiB: z.number().int().nonnegative().default(1024),
+    modelAdmissionMaxVramUsedMiB: z.number().int().nonnegative().default(2048),
+    modelAdmissionBlockForeignCuda: z.boolean().default(true),
     localOnly: z.literal(true).default(true)
   }).refine((v) => [v.opencodeUrl, v.llamaUrl].every((url) => ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)), "localOnly requires loopback runtime URLs"),
   modelRegistry: z.string().min(1).default("./config/models.local.yaml"),

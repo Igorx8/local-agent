@@ -24,10 +24,11 @@ export async function stopLocalModel(root: string, options: { shutdownTimeoutMs?
   await pollUntil(options.releaseProbe ?? vramReleaseProbe(options.modelUnloadVramThresholdMiB ?? 2048), timeout);
   await unlink(statePath(root)).catch(() => undefined);
 }
-export async function startLocalModel(root: string, registry: ModelRegistry, alias: string, entryPoint: ServerEntryPoint = { command: "llama", prefix: ["serve"] }, lifecycle: { shutdownTimeoutMs?: number; modelUnloadVramThresholdMiB?: number } = {}): Promise<RuntimeState> {
+export async function startLocalModel(root: string, registry: ModelRegistry, alias: string, entryPoint: ServerEntryPoint = { command: "llama", prefix: ["serve"] }, lifecycle: { shutdownTimeoutMs?: number; modelUnloadVramThresholdMiB?: number; admissionProbe?: (alias: string) => Promise<void> } = {}): Promise<RuntimeState> {
   requireAlias(registry, alias); const key = process.env[registry.apiKeyEnv]; if (!key) throw new Error(`${registry.apiKeyEnv} is not set`);
   const existing = await readModelRuntime(root); if (existing?.alias === alias && (await runtimeAliases(registry).catch((): string[] => [])).includes(alias)) return existing;
   if (existing) await stopLocalModel(root, lifecycle);
+  await lifecycle.admissionProbe?.(alias);
   const directory = path.join(root, ".agent-harness"); await mkdir(directory, { recursive: true }); const log = await open(path.join(directory, "model-server.log"), "a", 0o600);
   const profile = explicitProcessProfile(registry, alias, entryPoint, key); const child = spawn(profile.command, profile.args, { cwd: root, env: process.env, detached: true, shell: false, stdio: ["ignore", log.fd, log.fd] });
   if (!child.pid) throw new Error("llama.cpp process did not return a pid"); child.unref(); await log.close();

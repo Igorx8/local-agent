@@ -8,6 +8,7 @@ export type ProcessLauncher = (command: ModelProcessCommand) => ManagedProcess;
 export interface ProcessManagerOptions {
   baseUrl: string; models: Record<string, ModelProcessCommand>; apiKey?: string; startupTimeoutMs?: number; shutdownTimeoutMs?: number;
   restartCooldownMs?: number; fetcher?: FetchLike; launcher?: ProcessLauncher; releaseProbe?: (pid?: number) => Promise<boolean>; sleeper?: (milliseconds: number) => Promise<void>; onProcessOutput?: (stream: "stdout" | "stderr", text: string) => void;
+  admissionProbe?: (alias: string) => Promise<void>;
 }
 
 function launch(command: ModelProcessCommand, onOutput?: ProcessManagerOptions["onProcessOutput"]): ManagedProcess {
@@ -57,6 +58,7 @@ export class ProcessModelManager implements ModelLifecycle {
     const command = this.options.models[alias]; if (!command) throw new Error(`no process command configured for model: ${alias}`);
     if (this.current.alias === alias && this.current.state === "healthy" && await this.ready(alias)) return this.status();
     const stoppedPrevious = await this.stopProcess(); if (stoppedPrevious && (this.options.restartCooldownMs ?? 0) > 0) await this.sleeper(this.options.restartCooldownMs!);
+    await this.options.admissionProbe?.(alias);
     for (let attempt = 0; attempt < 2; attempt++) {
       this.current = { alias, state: "loading" }; this.process = this.launcher(command); this.current.pid = this.process.pid;
       let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined; let launchError: unknown;

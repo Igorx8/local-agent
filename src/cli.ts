@@ -10,6 +10,7 @@ import { readRun, requestManualHandoff, requestPause, resumeRun } from "./workfl
 import { loadModelRegistry, requireAlias } from "./models/registry.js";
 import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
 import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
+import { modelAdmissionProbe } from "./models/manager.js";
 import { reapOrphanedModel } from "./models/orphans.js";
 import { buildDashboardSnapshot } from "./telemetry/snapshot.js";
 import { eventFile, readEvents } from "./telemetry/events.js";
@@ -166,7 +167,7 @@ model.command("status").description("Show managed process and advertised aliases
   const repository = await workspace(); const registry = await loadModelRegistry(await registryFile(options.registry)); process.stdout.write(`${JSON.stringify({ process: await readModelRuntime(repository), aliases: await runtimeAliases(registry).catch(() => []) }, null, 2)}\n`);
 });
 for (const operation of ["start", "switch"] as const) model.command(operation).argument("<alias>").option("-r, --registry <file>", "registry").action(async (alias, options) => {
-  const repository = await workspace(); const config = await loadConfig(await configuration(repository)); const registry = await loadModelRegistry(await registryFile(options.registry)); requireAlias(registry, alias); process.stdout.write(`${JSON.stringify(await startLocalModel(repository, registry, alias, undefined, config.runtime), null, 2)}\n`);
+  const repository = await workspace(); const config = await loadConfig(await configuration(repository)); const registry = await loadModelRegistry(await registryFile(options.registry)); requireAlias(registry, alias); process.stdout.write(`${JSON.stringify(await startLocalModel(repository, registry, alias, undefined, { ...config.runtime, admissionProbe: modelAdmissionProbe(config, registry) }), null, 2)}\n`);
 });
 model.command("smoke").argument("<alias>").option("-r, --registry <file>", "registry").action(async (alias, options) => {
   const registry = await loadModelRegistry(await registryFile(options.registry)); const result = await smokeModel(registry, alias); process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); if (!result.completion || !result.toolCall) process.exitCode = 5;

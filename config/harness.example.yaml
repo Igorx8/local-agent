@@ -10,6 +10,11 @@ runtime:
   modelShutdownTimeoutMs: 60000
   modelRestartCooldownMs: 2000
   modelUnloadVramThresholdMiB: 2048
+  # Refuse a model load while host/GPU resources are already under pressure.
+  modelAdmissionRamReserveMiB: 4096
+  modelAdmissionMaxSwapUsedMiB: 1024
+  modelAdmissionMaxVramUsedMiB: 2048
+  modelAdmissionBlockForeignCuda: true
   localOnly: true
 modelRegistry: ./config/models.local.yaml
 routerPreset: ./config/models.local.ini

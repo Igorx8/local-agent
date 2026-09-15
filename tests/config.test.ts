@@ -12,7 +12,7 @@ describe("harnessConfigSchema", () => {
     expect(parsed.workflow.focusedInferenceRetries).toBe(1);
     expect(parsed.workflow.focusedInferenceTimeoutMs).toBe(180000);
     expect(parsed.workflow.autoMerge).toBe(false);
-    expect(parsed.runtime).toMatchObject({ modelStrategy: "process", modelStartupTimeoutMs: 600000, modelShutdownTimeoutMs: 60000, modelRestartCooldownMs: 2000, modelUnloadVramThresholdMiB: 2048 });
+    expect(parsed.runtime).toMatchObject({ modelStrategy: "process", modelStartupTimeoutMs: 600000, modelShutdownTimeoutMs: 60000, modelRestartCooldownMs: 2000, modelUnloadVramThresholdMiB: 2048, modelAdmissionRamReserveMiB: 4096, modelAdmissionMaxSwapUsedMiB: 1024, modelAdmissionMaxVramUsedMiB: 2048, modelAdmissionBlockForeignCuda: true });
     expect(parsed.context.handoffThreshold).toBe(0.85);
     expect(parsed.verification.flakyRepetitions).toBe(3);
     expect(parsed.verification.mutationTesting).toBe("changed-files");
