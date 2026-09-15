@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { assertModelAdmission, parseLlamaPredictedTokens } from "../src/models/resources.js";
+import { assertModelAdmission, parseLlamaDecodedTokens } from "../src/models/resources.js";
 import { ProcessModelManager } from "../src/models/process-adapter.js";
 
 const limits = { requiredRamMiB: 20_000, maxSwapUsedMiB: 1024, maxVramUsedMiB: 2048, blockForeignCuda: true };
@@ -25,9 +25,10 @@ describe("model resource admission", () => {
     expect(launcher).not.toHaveBeenCalled();
   });
 
-  it("parses the installed llama.cpp Prometheus token counter contract", () => {
-    expect(parseLlamaPredictedTokens("# HELP x\nllamacpp:tokens_predicted_total 2407\n")).toBe(2407);
-    expect(parseLlamaPredictedTokens('llamacpp:tokens_predicted_total{model="coder"} 42\n')).toBe(42);
-    expect(parseLlamaPredictedTokens("unrelated_metric 1\n")).toBeUndefined();
+  it("parses live decoded-token progress from active llama.cpp slots", () => {
+    expect(parseLlamaDecodedTokens([{ is_processing: true, next_token: { n_decoded: 2407 } }])).toBe(2407);
+    expect(parseLlamaDecodedTokens([{ is_processing: true, next_token: [{ n_decoded: 42 }] }])).toBe(42);
+    expect(parseLlamaDecodedTokens([{ is_processing: false, next_token: { n_decoded: 99 } }])).toBeUndefined();
+    expect(parseLlamaDecodedTokens({ slots: [] })).toBeUndefined();
   });
 });

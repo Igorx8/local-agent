@@ -45,11 +45,12 @@ export class OpencodeSessions {
         combined.throwIfAborted();
         if (Date.now() - lastProgressAt >= idleTimeoutMs) throw new Error(`OpenCode session ${sessionID} made no progress for ${idleTimeoutMs}ms`);
         const status = (await this.statuses(combined))[sessionID];
-        const predictedTokens = await progressProbe?.();
-        if (predictedTokens !== undefined) {
-          if (lastPredictedTokens !== undefined && predictedTokens > lastPredictedTokens) lastProgressAt = Date.now();
-          lastPredictedTokens = predictedTokens; const bucket = Math.floor(predictedTokens / 128);
-          if (bucket > reportedTokenBucket) { reportedTokenBucket = bucket; await onActivity?.({ type: "tokens", predictedTokens }); }
+        const generatedTokens = await progressProbe?.();
+        if (generatedTokens !== undefined) {
+          if (lastPredictedTokens !== undefined && generatedTokens > lastPredictedTokens) lastProgressAt = Date.now();
+          if (lastPredictedTokens !== undefined && generatedTokens < lastPredictedTokens) reportedTokenBucket = -1;
+          lastPredictedTokens = generatedTokens; const bucket = Math.floor(generatedTokens / 128);
+          if (bucket > reportedTokenBucket) { reportedTokenBucket = bucket; await onActivity?.({ type: "tokens", predictedTokens: generatedTokens }); }
         }
         if (onActivity || idleTimeoutMs < timeoutMs) {
           const messages = await this.messages(sessionID);

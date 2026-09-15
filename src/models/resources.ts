@@ -46,11 +46,23 @@ export function assertModelAdmission(alias: string, snapshot: ModelAdmissionSnap
   if (reasons.length) throw new Error(`model admission blocked for ${alias}: ${reasons.join("; ")}. Stop heavy workloads or adjust explicit runtime thresholds.`);
 }
 
-export function parseLlamaPredictedTokens(metrics: string): number | undefined {
-  const match = metrics.match(/^llamacpp:tokens_predicted_total(?:\{[^}]*\})?\s+([0-9]+(?:\.[0-9]+)?)/m);
-  if (!match) return undefined; const value = Number(match[1]); return Number.isFinite(value) ? value : undefined;
+export function parseLlamaDecodedTokens(value: unknown): number | undefined {
+  if (!Array.isArray(value)) return undefined;
+  let total = 0; let found = false;
+  for (const slot of value) {
+    if (!slot || typeof slot !== "object" || (slot as { is_processing?: unknown }).is_processing !== true) continue;
+    const rawNextToken = (slot as { next_token?: unknown }).next_token;
+    const nextToken = Array.isArray(rawNextToken) ? rawNextToken[0] : rawNextToken;
+    const decoded = nextToken && typeof nextToken === "object" ? (nextToken as { n_decoded?: unknown }).n_decoded : undefined;
+    if (typeof decoded === "number" && Number.isFinite(decoded) && decoded >= 0) { total += decoded; found = true; }
+  }
+  return found ? total : undefined;
 }
 
-export async function llamaPredictedTokens(baseUrl: string, apiKey?: string, fetcher: typeof fetch = fetch): Promise<number | undefined> {
-  try { const response = await fetcher(new URL("/metrics", baseUrl), { headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(3000) }); if (!response.ok) return undefined; return parseLlamaPredictedTokens(await response.text()); } catch { return undefined; }
+export async function llamaDecodedTokens(baseUrl: string, apiKey?: string, fetcher: typeof fetch = fetch): Promise<number | undefined> {
+  try {
+    const response = await fetcher(new URL("/slots", baseUrl), { headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(3000) });
+    if (!response.ok) return undefined;
+    return parseLlamaDecodedTokens(await response.json());
+  } catch { return undefined; }
 }
