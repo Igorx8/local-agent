@@ -25,6 +25,8 @@ Perguntas simples usam uma inferência somente leitura. Use `/ask` para forçar 
 
 O `/fix` pode repetir uma falha transitória de inferência local conforme `workflow.inferenceRetries`. O progresso informa a nova tentativa; se o OpenCode não estiver mais saudável, o turno para imediatamente e identifica a fase que falhou.
 
+Inferências longas são submetidas de forma assíncrona e acompanhadas até a sessão terminar; um heartbeat `Still working` aparece a cada 30 segundos sem conteúdo do prompt. Use `/fix` somente para uma alteração pequena e localizada. Tarefas que decompõem um plano grande ou criam muitos arquivos pertencem ao `/run`.
+
 ## Iniciar o serviço local
 
 Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.

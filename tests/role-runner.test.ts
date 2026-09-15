@@ -22,7 +22,7 @@ describe("structured role prompt", () => {
     const roles = ["supervisor", "planner", "testArchitect", "implementer", "repositoryReviewer", "requirementsReviewer", "validator", "repair", "adversarialVerifier", "auditor"];
     const config = harnessConfigSchema.parse({ version: 1, runtime: {}, models: Object.fromEntries(roles.map((role) => [role, `llama.cpp/${role === "planner" ? "qwen" : role}`])), workflow: { autoMerge: false }, context: {}, quality: {} });
     const controller = new AbortController(); const aborted: string[] = [];
-    const sessions = { create: async () => ({ id: "ses-active" }), prompt: async () => { controller.abort(); throw new Error("aborted"); }, abort: async (id: string) => { aborted.push(id); return true; } } as unknown as OpencodeSessions;
+    const sessions = { create: async () => ({ id: "ses-active" }), prompt: async () => undefined, waitUntilIdle: async () => { controller.abort(); throw new Error("aborted"); }, abort: async (id: string) => { aborted.push(id); return true; } } as unknown as OpencodeSessions;
     const model = { ensureModel: async () => ({ state: "healthy" }), beginRequest() {}, endRequest() {}, status: () => ({ state: "healthy" }), stop: async () => ({ state: "stopped" }) } as ModelLifecycle;
     const runner = new OpenCodeRoleRunner(sessions, model, config, undefined, {}, controller.signal);
     await expect(runner.invoke({ role: "planner", prompt: "plan", iteration: 0, artifactReferences: [], freshSession: true }, z.object({ ok: z.boolean() }))).rejects.toThrow("aborted");

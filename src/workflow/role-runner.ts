@@ -35,11 +35,11 @@ export class OpenCodeRoleRunner implements RoleRunner {
     const startedAt = performance.now();
     const effectivePrompt = structuredPrompt(invocation.prompt, schema);
     try {
-      const timeout = AbortSignal.timeout(this.config.workflow.inferenceTimeoutMs); const signal = this.shutdownSignal ? AbortSignal.any([timeout, this.shutdownSignal]) : timeout;
-      await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: agentNames[invocation.role], model: selection, signal });
+      await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: agentNames[invocation.role], model: selection, asynchronous: true, signal: this.shutdownSignal });
+      await this.sessions.waitUntilIdle(session.id, this.config.workflow.inferenceTimeoutMs, this.shutdownSignal);
     } catch (error) {
-      if (this.shutdownSignal?.aborted) await this.sessions.abort(session.id).catch(() => false);
-      throw phaseError("prompt request", error);
+      await this.sessions.abort(session.id).catch(() => false);
+      throw phaseError("asynchronous prompt/completion", error);
     } finally { this.models.endRequest(alias); }
     let messages;
     try { messages = await this.sessions.messages(session.id); } catch (error) { throw phaseError("response retrieval", error); }

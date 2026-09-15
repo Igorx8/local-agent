@@ -24,10 +24,10 @@ export function formatProgress(event: HarnessEvent, mode: ProgressMode): string 
 }
 
 export class ProgressReporter {
-  private emitted = 0; private timer?: NodeJS.Timeout; private busy = false;
-  constructor(private readonly identity: RunIdentity, private readonly mode: ProgressMode, private readonly sink: ProgressSink, private readonly intervalMs = 500) {}
-  start(): void { const identity = formatIdentity(this.identity, this.mode); if (identity) this.sink.write(`${identity}\n`); if (this.mode !== "off") this.timer = setInterval(() => { void this.flush(); }, this.intervalMs); }
-  async flush(): Promise<void> { if (this.busy || this.mode === "off") return; this.busy = true; try { const events = await readEvents(this.identity.artifactPath, Number.MAX_SAFE_INTEGER); for (const event of events.slice(this.emitted)) { const line = formatProgress(event, this.mode); if (line) this.sink.write(`${line}\n`); } this.emitted = events.length; } finally { this.busy = false; } }
+  private emitted = 0; private timer?: NodeJS.Timeout; private busy = false; private readonly startedAt = Date.now(); private lastVisibleAt = Date.now();
+  constructor(private readonly identity: RunIdentity, private readonly mode: ProgressMode, private readonly sink: ProgressSink, private readonly intervalMs = 500, private readonly heartbeatMs = 30_000) {}
+  start(): void { const identity = formatIdentity(this.identity, this.mode); if (identity) this.sink.write(`${identity}\n`); this.lastVisibleAt = Date.now(); if (this.mode !== "off") this.timer = setInterval(() => { void this.flush(); }, this.intervalMs); }
+  async flush(): Promise<void> { if (this.busy || this.mode === "off") return; this.busy = true; try { const events = await readEvents(this.identity.artifactPath, Number.MAX_SAFE_INTEGER); let visible = false; for (const event of events.slice(this.emitted)) { const line = formatProgress(event, this.mode); if (line) { this.sink.write(`${line}\n`); visible = true; } } this.emitted = events.length; if (visible) this.lastVisibleAt = Date.now(); else if (Date.now() - this.lastVisibleAt >= this.heartbeatMs) { const elapsedSeconds = Math.floor((Date.now() - this.startedAt) / 1000); const heartbeat = this.mode === "jsonl" ? JSON.stringify({ type: "run.heartbeat", timestamp: new Date().toISOString(), runId: this.identity.runId, elapsedSeconds }) : `[${new Date().toISOString().slice(11, 19)}] Still working (elapsed=${elapsedSeconds}s)`; this.sink.write(`${heartbeat}\n`); this.lastVisibleAt = Date.now(); } } finally { this.busy = false; } }
   async stop(): Promise<void> { if (this.timer) clearInterval(this.timer); await this.flush(); }
 }
 

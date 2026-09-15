@@ -21,4 +21,11 @@ describe("bounded CLI progress", () => {
   });
 
   it("rejects unknown output modes", () => { expect(parseProgressMode("jsonl")).toBe("jsonl"); expect(() => parseProgressMode("verbose")).toThrow(/invalid progress mode/); });
+
+  it("emits a bounded heartbeat when no visible event is produced", async () => {
+    const artifacts = await mkdtemp(path.join(tmpdir(), "harness-heartbeat-")); const output: string[] = [];
+    const reporter = new ProgressReporter({ runId: "run-slow", repositoryPath: "/worktree", artifactPath: artifacts }, "human", { write(value) { output.push(value); } }, 60_000, 0);
+    reporter.start(); await reporter.flush(); await reporter.stop();
+    expect(output.join("")).toContain("Still working"); expect(output.join("")).not.toContain("prompt");
+  });
 });
