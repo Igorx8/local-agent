@@ -126,6 +126,8 @@ O próprio `run`, `continue` ou `resume` mostra imediatamente o `runId`, o workt
 
 Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda está montando uma chamada de ferramenta. A escrita é atômica: o arquivo só aparece quando os argumentos terminam de ser gerados e validados, portanto não há arquivo parcial para acompanhar. Cada resposta do coder é limitada a 8.192 tokens e o `/fix` inteiro tem timeout de inferência de 180 segundos; ao excedê-lo, a execução falha sem publicar uma escrita incompleta. Os arquivos concluídos aparecem primeiro no `worktree` mostrado na linha `[run]`, e não no diretório principal do projeto.
 
+O `/fix` permite somente um reparo após a primeira revisão. Em arquivos existentes, esse reparo deve editar apenas os trechos apontados e preservar o restante; se a segunda revisão ainda encontrar um defeito acionável, o run falha fechado e mantém os checkpoints no worktree para inspeção, em vez de iniciar um ciclo indefinido.
+
 O primeiro `Ctrl+C` solicita uma pausa cooperativa. Depois que o run estiver pausado e o modelo tiver sido descarregado, use `harness resume RUN_ID` para continuar do último estado consistente.
 
 ## Arquivos criados no projeto
