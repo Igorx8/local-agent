@@ -1512,7 +1512,7 @@ Suggested exit codes:
 
 ### Current-worktree publication
 
-- AC-105: After a successful focused fix, the reviewed checkpoint is materialized as uncommitted changes in the repository working tree from which `local-agent` was started.
+- AC-105: After a successful `/fix` or complete `/run`, the reviewed checkpoint is materialized as uncommitted changes in the repository working tree from which `local-agent` was started.
 - AC-106: Publication never merges, commits, resets, or changes the current branch; the isolated branch and checkpoint remain the auditable source of the patch.
 - AC-107: Publication fails closed before modifying the repository if its HEAD or working tree changed after preflight, preserving both user work and the isolated checkpoint.
 
@@ -1762,7 +1762,7 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 ### Milestone 16: current-worktree publication
 
 - preserve isolated implementation, gates, review, checkpoint, and recovery evidence;
-- after `/fix` succeeds, generate a patch from the exact preflight commit to the approved checkpoint;
+- after `/fix` or `/run` succeeds, generate a patch from the exact preflight commit to the approved checkpoint;
 - validate the patch and recheck the repository HEAD and cleanliness before applying it;
 - materialize the patch as uncommitted changes in the current working tree, without merge, commit, reset, or branch movement;
 - persist the exact publication patch and metadata with the run artifacts;
