@@ -124,7 +124,7 @@ harness model status
 
 O próprio `run`, `continue` ou `resume` mostra imediatamente o `runId`, o worktree e o progresso resumido. Para integrações que exigem saída estruturada, use `--progress jsonl`; para silenciar o acompanhamento, use `--progress off`.
 
-Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda está montando uma chamada de ferramenta. A escrita é atômica: o arquivo só aparece quando os argumentos terminam de ser gerados e validados, portanto não há arquivo parcial para acompanhar. Cada resposta do coder é limitada a 8.192 tokens e o `/fix` inteiro tem timeout de inferência de 180 segundos; ao excedê-lo, a execução falha sem publicar uma escrita incompleta. Os arquivos concluídos aparecem primeiro no `worktree` mostrado na linha `[run]`, e não no diretório principal do projeto.
+Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda está montando uma chamada de ferramenta. Enquanto os argumentos crescem, eventos `input is streaming` mostram somente a quantidade gerada em bytes, nunca o conteúdo. A escrita permanece atômica: o arquivo só aparece quando os argumentos terminam de ser gerados e validados, portanto não há arquivo parcial para acompanhar. Cada resposta do coder é limitada a 8.192 tokens. Uma inferência focada pode durar no máximo 600 segundos, mas é cancelada antes se passar 100 segundos sem qualquer progresso observável. Os arquivos concluídos aparecem primeiro no `worktree` mostrado na linha `[run]`, e não no diretório principal do projeto.
 
 O `/fix` permite somente um reparo após a primeira revisão. Em arquivos existentes, esse reparo deve editar apenas os trechos apontados e preservar o restante; se a segunda revisão ainda encontrar um defeito acionável, o run falha fechado e mantém os checkpoints no worktree para inspeção, em vez de iniciar um ciclo indefinido.
 
@@ -140,6 +140,14 @@ runtime:
   modelAdmissionMaxSwapUsedMiB: 1024
   modelAdmissionMaxVramUsedMiB: 2048
   modelAdmissionBlockForeignCuda: true
+```
+
+Os limites do watchdog focado também podem ser ajustados explicitamente:
+
+```yaml
+workflow:
+  focusedInferenceTimeoutMs: 600000
+  focusedInferenceIdleTimeoutMs: 100000
 ```
 
 O primeiro `Ctrl+C` solicita uma pausa cooperativa. Depois que o run estiver pausado e o modelo tiver sido descarregado, use `harness resume RUN_ID` para continuar do último estado consistente.

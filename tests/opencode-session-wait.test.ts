@@ -45,6 +45,22 @@ describe("OpenCode asynchronous session completion", () => {
     await expect(sessions.waitUntilIdle("ses-1", 2_000)).resolves.toBeUndefined();
   });
 
+  it("renews the idle watchdog and reports bounded progress while tool input streams", async () => {
+    const status = vi.fn().mockResolvedValueOnce({ data: { "ses-1": { type: "busy" } } }).mockResolvedValueOnce({ data: { "ses-1": { type: "busy" } } }).mockResolvedValueOnce({ data: { "ses-1": { type: "idle" } } });
+    const tool = (raw: string) => ({ id: "tool-1", sessionID: "ses-1", messageID: "msg-1", type: "tool", tool: "write", callID: "call-1", state: { status: "pending", input: {}, raw } });
+    const messages = vi.fn().mockResolvedValueOnce({ data: [{ info: { role: "assistant" }, parts: [tool("x".repeat(1200))] }] }).mockResolvedValueOnce({ data: [{ info: { role: "assistant" }, parts: [tool("x".repeat(2400))] }] }).mockResolvedValueOnce({ data: [{ info: { role: "assistant" }, parts: [tool("x".repeat(3600))] }] });
+    const activity: unknown[] = []; const sessions = new OpencodeSessions({ session: { status, messages } } as never, "/workspace");
+    await expect(sessions.waitUntilIdle("ses-1", 2_000, undefined, (item) => { activity.push(item); }, 700)).resolves.toBeUndefined();
+    expect(activity).toContainEqual({ type: "stream", tool: "write", generatedBytes: 3600 });
+  });
+
+  it("cancels on inactivity independently from the absolute ceiling", async () => {
+    const status = vi.fn().mockResolvedValue({ data: { "ses-1": { type: "busy" } } });
+    const messages = vi.fn().mockResolvedValue({ data: [] });
+    const sessions = new OpencodeSessions({ session: { status, messages } } as never, "/workspace");
+    await expect(sessions.waitUntilIdle("ses-1", 2_000, undefined, () => undefined, 20)).rejects.toThrow("made no progress for 20ms");
+  });
+
   it("fails with a bounded diagnostic when the session never completes", async () => {
     const status = vi.fn().mockResolvedValue({ data: { "ses-1": { type: "busy" } } });
     const sessions = new OpencodeSessions({ session: { status } } as never, "/workspace");

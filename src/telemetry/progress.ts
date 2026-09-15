@@ -5,9 +5,9 @@ export type ProgressMode = "human" | "jsonl" | "off";
 export interface RunIdentity { runId: string; repositoryPath: string; artifactPath: string; }
 export interface ProgressSink { write(value: string): unknown; }
 
-const visibleTypes = new Set(["workflow.stage", "agent.start", "agent.end", "agent.tool", "agent.files", "agent.step", "inference.retry", "checkpoint", "gate.result", "handoff.start", "session.restart", "run.paused", "model.loading", "model.ready", "model.unloading", "model.stopped", "model.unload_failed", "error"]);
+const visibleTypes = new Set(["workflow.stage", "agent.start", "agent.end", "agent.tool", "agent.stream", "agent.files", "agent.step", "inference.retry", "checkpoint", "gate.result", "handoff.start", "session.restart", "run.paused", "model.loading", "model.ready", "model.unloading", "model.stopped", "model.unload_failed", "error"]);
 function safeData(event: HarnessEvent): Record<string, unknown> {
-  const source = event.data ?? {}; const keys = ["stage", "status", "role", "alias", "iteration", "attempt", "maximum", "name", "tool", "files", "inputTokens", "outputTokens", "reasoningTokens", "durationMs", "exitCode", "sequence", "reason", "commit", "pausedFromStage"];
+  const source = event.data ?? {}; const keys = ["stage", "status", "role", "alias", "iteration", "attempt", "maximum", "name", "tool", "files", "generatedBytes", "inputTokens", "outputTokens", "reasoningTokens", "durationMs", "exitCode", "sequence", "reason", "commit", "pausedFromStage"];
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
 }
 

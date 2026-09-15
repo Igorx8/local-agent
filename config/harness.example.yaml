@@ -36,7 +36,9 @@ workflow:
   inferenceRetries: 2
   inferenceTimeoutMs: 900000
   focusedInferenceRetries: 1
-  focusedInferenceTimeoutMs: 180000
+  # Ten-minute absolute ceiling plus a progress-aware inactivity watchdog.
+  focusedInferenceTimeoutMs: 600000
+  focusedInferenceIdleTimeoutMs: 100000
   requireObjectiveProgress: true
   stopAfterConsecutiveStagnantIterations: 2
   autoCommitCheckpoints: true
