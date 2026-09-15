@@ -13,8 +13,8 @@
         "apiKey": "{env:LLAMA_API_KEY}"
       },
       "models": {
-        "qwen36-main": { "name": "Qwen3.6 35B A3B UD-IQ3_S" },
-        "qwen3-coder-impl": { "name": "Qwen3 Coder 30B A3B UD-Q4_K_XL" }
+        "qwen36-main": { "name": "Qwen3.6 35B A3B UD-IQ3_S", "limit": { "context": 65536, "output": 16384 } },
+        "qwen3-coder-impl": { "name": "Qwen3 Coder 30B A3B UD-Q4_K_XL", "limit": { "context": 65536, "output": 8192 } }
       }
     }
   },
