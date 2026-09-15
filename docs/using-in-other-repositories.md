@@ -31,6 +31,8 @@ O `/fix` usa agentes próprios com no máximo oito passos e encerra uma inferên
 
 O progresso incremental distingue carregamento do modelo, tool calls, arquivos alterados e tokens concluídos por passo. Entradas e conteúdos dos arquivos não são impressos. Durante o run, procure as alterações no `worktree` mostrado na primeira linha; o diretório principal permanece intocado até você integrar manualmente o checkpoint.
 
+Ao iniciar, `local-agent` também consulta o endpoint llama.cpp. Um processo cujo pai já terminou, que corresponda exatamente ao executável, porta e alias locais registrados, é encerrado antes de aceitar prompts. Se o processo ainda tiver um proprietário ativo ou não puder ser identificado sem ambiguidade, o shell falha sem matar nada e pede que a outra sessão seja encerrada.
+
 ## Iniciar o serviço local
 
 Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.

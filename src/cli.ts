@@ -10,6 +10,7 @@ import { readRun, requestManualHandoff, requestPause, resumeRun } from "./workfl
 import { loadModelRegistry, requireAlias } from "./models/registry.js";
 import { mergeOpenCodeLocal, prepareLocalModels } from "./models/local-config.js";
 import { readModelRuntime, runtimeAliases, smokeModel, startLocalModel, stopLocalModel } from "./models/control.js";
+import { reapOrphanedModel } from "./models/orphans.js";
 import { buildDashboardSnapshot } from "./telemetry/snapshot.js";
 import { eventFile, readEvents } from "./telemetry/events.js";
 import { watch } from "node:fs";
@@ -54,6 +55,7 @@ async function interactiveShell(repository: string, config: Awaited<ReturnType<t
   const remember = async (value: string) => { const safe = redact(value, [process.env[config.apiKeyEnv] ?? ""], config.security.redactPatterns); history.push(String(safe)); await writeShellHistory(repository, history); };
   const prepareWorkflow = async () => { await ensureHarnessIgnored(repository); try { await ensureRepositoryBaseline(repository); } catch (error) { if (!(error instanceof UnbornRepositoryDirtyError)) throw error; const shown = error.files.slice(0, 10).join(", "); const suffix = error.files.length > 10 ? ` and ${error.files.length - 10} more` : ""; const answer = (await terminal.question(`This repository has no commits and ${error.files.length} uncommitted path(s): ${shown}${suffix}. Create the initial commit with all current files? [y/N] `)).trim().toLowerCase(); if (answer !== "y" && answer !== "yes") throw error; const baseline = await ensureRepositoryBaseline(repository, true); process.stdout.write(`Initial repository baseline created: ${baseline.commit}\n`); } };
   try {
+    if (config.runtime.modelStrategy === "process") { const registry = await loadModelRegistry(config.modelRegistry); const reaped = await reapOrphanedModel(registry, config.runtime.llamaUrl); if (reaped) process.stdout.write(`Recovered orphaned model: ${reaped.alias} (pid ${reaped.pid})\n`); }
     service = await ensureOpencodeService({ baseUrl: config.runtime.opencodeUrl, configFile: config.runtime.opencodeConfig }); process.stdout.write(`Local Agent — ${repository}\nOpenCode: ${service.owned ? "started for this shell" : "reusing healthy service"} (${service.url})\nType /help for commands. Plain text starts a workflow turn.\n`);
     while (true) {
       const input = (await terminal.question("you> ")).trim(); if (!input) continue; await remember(input); let command;
