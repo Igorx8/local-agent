@@ -1753,6 +1753,8 @@ Implementation result (2026-09-10): AC-092–AC-098 are implemented. Ask mode us
 
 Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has a dedicated persisted run and isolated worktree, requires passing baseline and post-edit gates, uses the configured implementer for the initial edit, validates paths before checkpoint creation, runs one fresh focused reviewer, permits at most one repair, and repeats gates/review before success. Errors persist a failed state and final cleanup unloads the model. Parser, scope-policy, regression-suite, TypeScript, and production-build validation pass; a live model fix was intentionally not combined with implementation validation and remains the recommended first hands-on check.
 
+Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
+
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.

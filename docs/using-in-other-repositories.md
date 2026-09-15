@@ -23,6 +23,8 @@ Perguntas simples usam uma inferência somente leitura. Use `/ask` para forçar 
 /run implemente a primeira etapa de @plano.md
 ```
 
+O `/fix` pode repetir uma falha transitória de inferência local conforme `workflow.inferenceRetries`. O progresso informa a nova tentativa; se o OpenCode não estiver mais saudável, o turno para imediatamente e identifica a fase que falhou.
+
 ## Iniciar o serviço local
 
 Inicie somente o OpenCode. O harness inicia e encerra um processo isolado do llama.cpp para cada alias conforme necessário; não inicie o router manualmente quando `modelStrategy: process` estiver configurado.

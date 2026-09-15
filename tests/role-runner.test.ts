@@ -28,4 +28,13 @@ describe("structured role prompt", () => {
     await expect(runner.invoke({ role: "planner", prompt: "plan", iteration: 0, artifactReferences: [], freshSession: true }, z.object({ ok: z.boolean() }))).rejects.toThrow("aborted");
     expect(aborted).toEqual(["ses-active"]);
   });
+
+  it("identifies the OpenCode phase behind a transport failure", async () => {
+    const roles = ["supervisor", "planner", "testArchitect", "implementer", "repositoryReviewer", "requirementsReviewer", "validator", "repair", "adversarialVerifier", "auditor"];
+    const config = harnessConfigSchema.parse({ version: 1, runtime: {}, models: Object.fromEntries(roles.map((role) => [role, "llama.cpp/qwen"])), workflow: { autoMerge: false }, context: {}, quality: {} });
+    const sessions = { create: async () => { throw new Error("fetch failed"); } } as unknown as OpencodeSessions;
+    const model = { ensureModel: async () => ({ state: "healthy" }), beginRequest() {}, endRequest() {}, status: () => ({ state: "healthy" }), stop: async () => ({ state: "stopped" }) } as ModelLifecycle;
+    const runner = new OpenCodeRoleRunner(sessions, model, config);
+    await expect(runner.invoke({ role: "implementer", prompt: "fix", iteration: 0, artifactReferences: [], freshSession: true }, z.object({ ok: z.boolean() }))).rejects.toThrow("OpenCode session creation failed: fetch failed");
+  });
 });

@@ -17,13 +17,19 @@ function jsonFromText(text: string): unknown {
 }
 export function structuredPrompt(prompt: string, schema: z.ZodType): string { return `${prompt}\nExact JSON Schema for the only accepted response:\n${JSON.stringify(z.toJSONSchema(schema), null, 2)}`; }
 
+function phaseError(phase: string, error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error);
+  return new Error(`OpenCode ${phase} failed: ${detail}`, { cause: error });
+}
+
 export class OpenCodeRoleRunner implements RoleRunner {
   constructor(private readonly sessions: OpencodeSessions, private readonly models: ModelLifecycle, private readonly config: HarnessConfig, private readonly onSession?: (role: AgentRole, sessionID: string) => Promise<void> | void, private readonly contextWindows: Record<string, number> = {}, private readonly shutdownSignal?: AbortSignal) {}
   async invoke<T>(invocation: RoleInvocation, schema: z.ZodType<T>): Promise<RoleResult<T>> {
     const configured = this.config.models[invocation.role];
     const selection = parseModelAlias(configured); const alias = selection.modelID;
-    await this.models.ensureModel(alias);
-    const session = await this.sessions.create(`harness ${invocation.role} iteration ${invocation.iteration}`);
+    try { await this.models.ensureModel(alias); } catch (error) { throw phaseError(`model activation (${alias})`, error); }
+    let session;
+    try { session = await this.sessions.create(`harness ${invocation.role} iteration ${invocation.iteration}`); } catch (error) { throw phaseError("session creation", error); }
     await this.onSession?.(invocation.role, session.id);
     this.models.beginRequest(alias);
     const startedAt = performance.now();
@@ -33,9 +39,10 @@ export class OpenCodeRoleRunner implements RoleRunner {
       await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: agentNames[invocation.role], model: selection, signal });
     } catch (error) {
       if (this.shutdownSignal?.aborted) await this.sessions.abort(session.id).catch(() => false);
-      throw error;
+      throw phaseError("prompt request", error);
     } finally { this.models.endRequest(alias); }
-    const messages = await this.sessions.messages(session.id);
+    let messages;
+    try { messages = await this.sessions.messages(session.id); } catch (error) { throw phaseError("response retrieval", error); }
     const response = [...messages].reverse().find((message) => message.info.role === "assistant");
     const raw = response?.parts.filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
     const exact = this.sessions.latestUsage(messages); const contextWindow = this.contextWindows[alias] ?? 65536;
