@@ -15,7 +15,7 @@ function launch(command: ModelProcessCommand, onOutput?: ProcessManagerOptions["
   child.stdout?.on("data", (chunk: Buffer) => onOutput?.("stdout", chunk.toString("utf8")));
   child.stderr?.on("data", (chunk: Buffer) => onOutput?.("stderr", chunk.toString("utf8")));
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => { child.once("error", reject); child.once("exit", (code, signal) => resolve({ code, signal })); });
-  return { pid: child.pid, exited, stop(signal) { if (child.pid && process.platform !== "win32") process.kill(-child.pid, signal); else child.kill(signal); } };
+  return { pid: child.pid, exited, stop(signal) { try { if (child.pid && process.platform !== "win32") process.kill(-child.pid, signal); else child.kill(signal); } catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; } } };
 }
 
 export class ProcessModelManager implements ModelLifecycle {
@@ -50,12 +50,12 @@ export class ProcessModelManager implements ModelLifecycle {
   private async stopProcess(): Promise<boolean> {
     if (!this.process) return false;
     this.current = { ...this.current, state: "unloading" };
-    const process = this.process; process.stop("SIGTERM"); await this.waitForExit(process); this.process = undefined; return true;
+    const process = this.process; try { process.stop("SIGTERM"); } catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; } await this.waitForExit(process); this.process = undefined; return true;
   }
   async ensureModel(alias: string): Promise<ModelStatus> {
     if (this.activeRequests) throw new ActiveModelRequestError("cannot switch models while a response is active");
     const command = this.options.models[alias]; if (!command) throw new Error(`no process command configured for model: ${alias}`);
-    if (this.current.alias === alias && this.current.state === "healthy") return this.status();
+    if (this.current.alias === alias && this.current.state === "healthy" && await this.ready(alias)) return this.status();
     const stoppedPrevious = await this.stopProcess(); if (stoppedPrevious && (this.options.restartCooldownMs ?? 0) > 0) await this.sleeper(this.options.restartCooldownMs!);
     for (let attempt = 0; attempt < 2; attempt++) {
       this.current = { alias, state: "loading" }; this.process = this.launcher(command); this.current.pid = this.process.pid;

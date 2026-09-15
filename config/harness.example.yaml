@@ -30,6 +30,8 @@ workflow:
   adaptiveReviewMaximum: 5
   inferenceRetries: 2
   inferenceTimeoutMs: 900000
+  focusedInferenceRetries: 1
+  focusedInferenceTimeoutMs: 180000
   requireObjectiveProgress: true
   stopAfterConsecutiveStagnantIterations: 2
   autoCommitCheckpoints: true

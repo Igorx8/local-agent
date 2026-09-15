@@ -19,4 +19,11 @@ describe("explicit process model lifecycle", () => {
     expect(order).toEqual(["load-one", "released", "cooldown-2000", "load-two"]);
     manager.beginRequest("two"); await expect(manager.stop()).rejects.toThrow(/active/); manager.endRequest("two"); await manager.stop();
   });
+
+  it("recovers an alias whose prior process exited and tolerates ESRCH during cleanup", async () => {
+    let launches = 0; let healthy = false;
+    const manager = new ProcessModelManager({ baseUrl: "http://127.0.0.1:8080", models: { one: { command: "llama-server", args: ["one"] } }, startupTimeoutMs: 100, shutdownTimeoutMs: 100, async releaseProbe() { return true; }, fetcher: async (input) => new Response(JSON.stringify(new URL(String(input)).pathname === "/health" ? { status: "ok" } : { data: healthy ? [{ id: "one" }] : [] }), { status: healthy ? 200 : 503 }), launcher() { launches++; healthy = true; return { pid: 42 + launches, exited: Promise.resolve({ code: 1, signal: null }), stop() { healthy = false; const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; } }; } });
+    await manager.ensureModel("one"); healthy = false; await manager.ensureModel("one");
+    expect(launches).toBe(2); await expect(manager.stop()).resolves.toMatchObject({ state: "stopped" });
+  });
 });

@@ -25,4 +25,11 @@ describe("focused inference retries", () => {
     await expect(invokeFocusedInference({ role: "implementer", retries: 2, invoke, onRetry: async () => { throw healthFailure; } })).rejects.toBe(healthFailure);
     expect(invoke).toHaveBeenCalledTimes(1);
   });
+
+  it("does not retry an explicitly non-retryable focused timeout", async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error("did not become idle within 180000ms"));
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    await expect(invokeFocusedInference({ role: "implementer", retries: 1, invoke, onRetry, shouldRetry: () => false })).rejects.toThrow("180000ms");
+    expect(invoke).toHaveBeenCalledTimes(1); expect(onRetry).not.toHaveBeenCalled();
+  });
 });

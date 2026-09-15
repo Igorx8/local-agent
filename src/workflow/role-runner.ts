@@ -5,7 +5,7 @@ import { parseModelAlias, type OpencodeSessions } from "../opencode/sessions.js"
 import type { AgentRole } from "../opencode/agents.js";
 import type { TokenObservation } from "../context/budget.js";
 
-export interface RoleInvocation { role: AgentRole; prompt: string; iteration: number; artifactReferences: string[]; freshSession: true; }
+export interface RoleInvocation { role: AgentRole; prompt: string; iteration: number; artifactReferences: string[]; freshSession: true; agent?: string; timeoutMs?: number; }
 export interface RoleResult<T> { value: T; sessionID: string; raw: string; context?: TokenObservation; telemetry?: { alias: string; requestDurationMs: number; tokensPerSecond?: number }; }
 export interface RoleRunner { invoke<T>(invocation: RoleInvocation, schema: z.ZodType<T>): Promise<RoleResult<T>>; }
 
@@ -35,8 +35,8 @@ export class OpenCodeRoleRunner implements RoleRunner {
     const startedAt = performance.now();
     const effectivePrompt = structuredPrompt(invocation.prompt, schema);
     try {
-      await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: agentNames[invocation.role], model: selection, asynchronous: true, signal: this.shutdownSignal });
-      await this.sessions.waitUntilIdle(session.id, this.config.workflow.inferenceTimeoutMs, this.shutdownSignal);
+      await this.sessions.prompt({ sessionID: session.id, text: effectivePrompt, agent: invocation.agent ?? agentNames[invocation.role], model: selection, asynchronous: true, signal: this.shutdownSignal });
+      await this.sessions.waitUntilIdle(session.id, invocation.timeoutMs ?? this.config.workflow.inferenceTimeoutMs, this.shutdownSignal);
     } catch (error) {
       await this.sessions.abort(session.id).catch(() => false);
       throw phaseError("asynchronous prompt/completion", error);

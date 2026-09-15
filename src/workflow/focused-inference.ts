@@ -12,6 +12,7 @@ export async function invokeFocusedInference<T>(options: {
   retries: number;
   invoke(): Promise<T>;
   onRetry(event: FocusedInferenceRetry): Promise<void>;
+  shouldRetry?(error: unknown): boolean;
 }): Promise<T> {
   let lastError: unknown;
   const maximum = options.retries + 1;
@@ -20,9 +21,9 @@ export async function invokeFocusedInference<T>(options: {
       return await options.invoke();
     } catch (error) {
       lastError = error;
-      if (index + 1 < maximum) {
+      if (index + 1 < maximum && (options.shouldRetry?.(error) ?? true)) {
         await options.onRetry({ role: options.role, attempt: index + 2, maximum, error });
-      }
+      } else break;
     }
   }
   throw lastError;

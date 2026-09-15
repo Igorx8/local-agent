@@ -9,6 +9,8 @@ describe("harnessConfigSchema", () => {
     const parsed = harnessConfigSchema.parse(valid);
     expect(parsed.workflow.maxReviewIterations).toBe(3);
     expect(parsed.workflow.inferenceTimeoutMs).toBe(900000);
+    expect(parsed.workflow.focusedInferenceRetries).toBe(1);
+    expect(parsed.workflow.focusedInferenceTimeoutMs).toBe(180000);
     expect(parsed.workflow.autoMerge).toBe(false);
     expect(parsed.runtime).toMatchObject({ modelStrategy: "process", modelStartupTimeoutMs: 600000, modelShutdownTimeoutMs: 60000, modelRestartCooldownMs: 2000, modelUnloadVramThresholdMiB: 2048 });
     expect(parsed.context.handoffThreshold).toBe(0.85);

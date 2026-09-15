@@ -34,6 +34,8 @@ export const harnessConfigSchema = z.object({
     adaptiveReviewMaximum: z.number().int().min(1).default(5),
     inferenceRetries: z.number().int().min(0).default(2),
     inferenceTimeoutMs: z.number().int().positive().default(900_000),
+    focusedInferenceRetries: z.number().int().min(0).default(1),
+    focusedInferenceTimeoutMs: z.number().int().positive().default(180_000),
     requireObjectiveProgress: z.boolean().default(true),
     stopAfterConsecutiveStagnantIterations: z.number().int().min(1).default(2),
     autoCommitCheckpoints: z.boolean().default(true),
