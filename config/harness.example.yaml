@@ -11,7 +11,7 @@ runtime:
   modelRestartCooldownMs: 2000
   modelUnloadVramThresholdMiB: 2048
   # Refuse a model load while host/GPU resources are already under pressure.
-  modelAdmissionRamReserveMiB: 4096
+  modelAdmissionRamReserveMiB: 2048
   modelAdmissionMaxSwapUsedMiB: 1024
   modelAdmissionMaxVramUsedMiB: 2048
   modelAdmissionBlockForeignCuda: true

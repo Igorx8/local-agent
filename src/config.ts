@@ -21,7 +21,7 @@ export const harnessConfigSchema = z.object({
     modelShutdownTimeoutMs: z.number().int().positive().default(60_000),
     modelRestartCooldownMs: z.number().int().nonnegative().default(2_000),
     modelUnloadVramThresholdMiB: z.number().int().nonnegative().default(2048),
-    modelAdmissionRamReserveMiB: z.number().int().nonnegative().default(4096),
+    modelAdmissionRamReserveMiB: z.number().int().nonnegative().default(2048),
     modelAdmissionMaxSwapUsedMiB: z.number().int().nonnegative().default(1024),
     modelAdmissionMaxVramUsedMiB: z.number().int().nonnegative().default(2048),
     modelAdmissionBlockForeignCuda: z.boolean().default(true),

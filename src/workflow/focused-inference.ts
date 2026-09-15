@@ -7,6 +7,11 @@ export interface FocusedInferenceRetry {
   error: unknown;
 }
 
+export function isFocusedInferenceRetryable(error: unknown): boolean {
+  if (!(error instanceof Error)) return true;
+  return !["did not become idle within", "made no progress for", "model admission blocked"].some((message) => error.message.includes(message)) && error.name !== "AbortError";
+}
+
 export async function invokeFocusedInference<T>(options: {
   role: AgentRole;
   retries: number;

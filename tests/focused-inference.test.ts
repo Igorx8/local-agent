@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { invokeFocusedInference } from "../src/workflow/focused-inference.js";
+import { invokeFocusedInference, isFocusedInferenceRetryable } from "../src/workflow/focused-inference.js";
 
 describe("focused inference retries", () => {
   it("retries a transient failure and reports the scheduled attempt", async () => {
@@ -31,5 +31,11 @@ describe("focused inference retries", () => {
     const onRetry = vi.fn().mockResolvedValue(undefined);
     await expect(invokeFocusedInference({ role: "implementer", retries: 1, invoke, onRetry, shouldRetry: () => false })).rejects.toThrow("180000ms");
     expect(invoke).toHaveBeenCalledTimes(1); expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it("does not retry deterministic resource-admission failures", async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error("model admission blocked for coder: insufficient RAM")); const onRetry = vi.fn();
+    await expect(invokeFocusedInference({ role: "implementer", retries: 1, invoke, onRetry, shouldRetry: isFocusedInferenceRetryable })).rejects.toThrow("model admission blocked");
+    expect(invoke).toHaveBeenCalledOnce(); expect(onRetry).not.toHaveBeenCalled();
   });
 });
