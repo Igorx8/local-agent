@@ -7,6 +7,7 @@ describe("focused workflow prompts", () => {
     expect(prompt).toContain("explicit task");
     expect(prompt).toContain("demonstrably introduced");
     expect(prompt).toContain("Do not invent additional acceptance criteria");
+    expect(prompt).toContain("scan the complete affected file");
   });
 
   it("requires surgical edits during the single repair opportunity", () => {
@@ -15,5 +16,7 @@ describe("focused workflow prompts", () => {
     expect(prompt).toContain("never regenerate or rewrite the whole file");
     expect(prompt).toContain("Preserve all unaffected content byte-for-byte");
     expect(prompt).toContain("do not create new paths");
+    expect(prompt).toContain("Never apply a suggested identifier or numbering range blindly");
+    expect(prompt).toContain("file-wide invariant");
   });
 });

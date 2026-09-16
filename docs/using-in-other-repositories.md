@@ -130,6 +130,8 @@ Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda est
 
 O `/fix` permite somente um reparo após a primeira revisão. Em arquivos existentes, esse reparo deve editar apenas os trechos apontados e preservar o restante; se a segunda revisão ainda encontrar um defeito acionável, o run falha fechado e mantém os checkpoints no worktree para inspeção, em vez de iniciar um ciclo indefinido.
 
+Para defeitos de unicidade, numeração, links ou referências, “reparo localizado” limita a edição, mas não a verificação: o agente deve inspecionar o namespace completo do arquivo antes e depois da mudança. Isso evita corrigir uma colisão criando outra em uma faixa diferente.
+
 ## Gate de recursos antes de carregar modelos
 
 Antes de qualquer carga ou troca, o harness confirma que há recursos seguros no host. Por padrão, ele exige RAM disponível igual ao tamanho exato do GGUF mais 2 GiB, no máximo 1 GiB de swap já utilizado, no máximo 2 GiB de VRAM ocupada e nenhum processo CUDA externo. Isso também vale para `harness model start` e `harness model switch`.
