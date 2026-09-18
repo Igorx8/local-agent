@@ -1516,6 +1516,7 @@ Suggested exit codes:
 - AC-106: Publication never merges, commits, resets, or changes the current branch; the isolated branch and checkpoint remain the auditable source of the patch.
 - AC-107: Publication fails closed before modifying the repository if its HEAD or working tree changed after preflight, preserving both user work and the isolated checkpoint.
 - AC-108: `/apply [run-id]` explicitly materializes the latest preserved checkpoint from a terminal failed, escalated, or successful run as uncommitted changes, records that failed-run approval was manually bypassed, and never reruns a model, merges, commits, or moves the current branch.
+- AC-109: A subsequent `/fix` accepts a dirty working tree only when every dirty path and blob exactly matches a persisted harness checkpoint, starts its isolated worktree from that checkpoint, and synchronizes the new checkpoint back to the same root; unrelated or manually modified content remains blocked.
 
 ## 23. Test plan
 
@@ -1771,6 +1772,7 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 - reject concurrent user changes without overwriting them;
 - allow explicit recovery of a preserved terminal-run checkpoint through `/apply [run-id]` without another inference;
 - test successful publication, HEAD preservation, concurrent-change refusal, and failed-run recovery for AC-105–AC-108.
+- test recognition and continuation of an exact previously published checkpoint for AC-109.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 

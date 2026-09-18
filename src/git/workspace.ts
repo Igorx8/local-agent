@@ -74,7 +74,7 @@ export async function publishCheckpoint(repository: string, expectedBaseCommit: 
   return { commit: checkpointCommit, files, patchFile: destination };
 }
 
-async function assertWorkingTreeMatchesCheckpoint(repository: string, baselineCommit: string, checkpointCommit: string, expectedFiles: string[]): Promise<void> {
+export async function assertWorkingTreeMatchesCheckpoint(repository: string, baselineCommit: string, checkpointCommit: string, expectedFiles: string[]): Promise<void> {
   const identity = await inspectRepository(repository); if (identity.commit !== baselineCommit) throw new Error(`repository HEAD changed during the run: expected ${baselineCommit}, found ${identity.commit}`);
   const actualFiles = (await changedFiles(repository)).sort(); const expected = [...expectedFiles].sort(); if (actualFiles.length !== expected.length || expected.some((file, index) => actualFiles[index] !== file)) throw new Error("repository working tree changed after checkpoint publication; preserved checkpoint was not synchronized");
   for (const file of expected) {
