@@ -130,6 +130,8 @@ Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda est
 
 O `/fix` permite somente um reparo após a primeira revisão. Em arquivos existentes, esse reparo deve editar apenas os trechos apontados e preservar o restante; se a segunda revisão ainda encontrar um defeito acionável, o run falha fechado e mantém os checkpoints no worktree para inspeção, em vez de iniciar um ciclo indefinido.
 
+Antes desse reparo, um validator independente classifica todos os findings do reviewer. Apenas defeitos confirmados de severidade alta ou crítica bloqueiam o `/fix`; requisitos inventados, preferências de estilo e itens fora de escopo são rejeitados. Se o repair atingir seu limite sem alterar arquivos, o erro informa os blockers declarados antes de tentar criar um checkpoint vazio.
+
 Para defeitos de unicidade, numeração, links ou referências, “reparo localizado” limita a edição, mas não a verificação: o agente deve inspecionar o namespace completo do arquivo antes e depois da mudança. Isso evita corrigir uma colisão criando outra em uma faixa diferente.
 
 ## Gate de recursos antes de carregar modelos

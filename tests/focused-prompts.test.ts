@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusedRepairPrompt, focusedReviewPrompt } from "../src/workflow/fix.js";
+import { assertFocusedRepairChanged, focusedBlockingFindings, focusedRepairPrompt, focusedReviewPrompt } from "../src/workflow/fix.js";
 
 describe("focused workflow prompts", () => {
   it("limits review findings to explicit requirements and introduced defects", () => {
@@ -18,5 +18,17 @@ describe("focused workflow prompts", () => {
     expect(prompt).toContain("do not create new paths");
     expect(prompt).toContain("Never apply a suggested identifier or numbering range blindly");
     expect(prompt).toContain("file-wide invariant");
+  });
+
+  it("repairs only validated high-severity findings", () => {
+    const finding = (id: string, severity: "high" | "low") => ({ id, severity, problem: id, evidence: id, reproduction: id, expectedBehavior: id, actualBehavior: id, suggestedFix: id, confidence: "high" as const });
+    const findings = [finding("invented", "high"), finding("style", "low"), finding("real", "high")];
+    const triage = { findings: [{ findingId: "invented", classification: "invalid" as const, evidence: "not required", rootCause: "invented", testable: false }, { findingId: "style", classification: "confirmed" as const, evidence: "wording", rootCause: "style", testable: false, regressionTestExemption: "style only" }, { findingId: "real", classification: "confirmed" as const, evidence: "reproduced", rootCause: "defect", testable: true }] };
+    expect(focusedBlockingFindings(findings, triage).map((item) => item.id)).toEqual(["real"]);
+  });
+
+  it("reports a no-op repair blocker before checkpoint creation", () => {
+    expect(() => assertFocusedRepairChanged([], ["Maximum steps reached"])).toThrow("focused repair produced no file changes: Maximum steps reached");
+    expect(() => assertFocusedRepairChanged(["tasks/README.md"], [])).not.toThrow();
   });
 });
