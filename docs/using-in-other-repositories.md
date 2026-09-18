@@ -21,6 +21,7 @@ Perguntas simples usam uma inferência somente leitura. Use `/ask` para forçar 
 /ask --web resuma https://example.com/documentacao
 /fix corrija o erro localizado em @src/service.ts
 /run implemente a primeira etapa de @plano.md
+/apply fix-20260918181332-7912e5fc
 ```
 
 O `/fix` pode repetir uma falha transitória de inferência local conforme `workflow.inferenceRetries`. O progresso informa a nova tentativa; se o OpenCode não estiver mais saudável, o turno para imediatamente e identifica a fase que falhou.
@@ -125,6 +126,8 @@ harness model status
 ```
 
 O próprio `run`, `continue` ou `resume` mostra imediatamente o `runId`, o worktree e o progresso resumido. Para integrações que exigem saída estruturada, use `--progress jsonl`; para silenciar o acompanhamento, use `--progress off`.
+
+Se um run terminal falhar depois de já criar um checkpoint aproveitável, use `/apply [run-id]` no `local-agent` — sem ID, o comando escolhe o run mais recente. Ele recupera o último checkpoint como alterações não commitadas na raiz, sem carregar modelos novamente. Em runs que não tiveram sucesso, esse comando é a aprovação explícita do usuário para ignorar o veredito automático; a origem, o commit e os arquivos aplicados ficam registrados em `manual-publication.json`. Runs ativos ou pausados e raízes alteradas concorrentemente são recusados.
 
 Durante `/fix`, eventos como `tool write pending` indicam que o modelo ainda está montando uma chamada de ferramenta. Quando o OpenCode publica argumentos parciais, eventos `input is streaming` mostram somente a quantidade gerada em bytes. Como algumas versões do OpenCode mantêm esses argumentos bufferizados, o harness também consulta os slots ativos do llama.cpp e acompanha `next_token.n_decoded`; eventos `model generation is progressing` mostram esse progresso em blocos de 128 tokens. Nenhum desses eventos expõe conteúdo. A escrita permanece atômica: o arquivo só aparece no worktree quando os argumentos terminam de ser gerados e validados. Cada resposta do coder é limitada a 8.192 tokens. Uma inferência focada pode durar no máximo 600 segundos, mas é cancelada antes se passar 100 segundos sem progresso em nenhuma das fontes. Somente depois dos gates e da revisão, um `/fix` bem-sucedido publica o patch no diretório principal como mudanças não commitadas.
 

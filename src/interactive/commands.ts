@@ -1,4 +1,4 @@
-export const slashCommands = ["ask", "fix", "run", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
+export const slashCommands = ["ask", "fix", "run", "apply", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
 export type SlashCommandName = (typeof slashCommands)[number];
 export interface SlashCommand { name: SlashCommandName; args: string[]; web?: boolean; }
 
@@ -6,6 +6,7 @@ export const shellHelp = `Slash commands:
   /ask [--web] <text>   one fast read-only answer
   /fix <task>           focused fix with gates and review
   /run <task>           complete audited engineering workflow
+  /apply [run-id]       apply a preserved checkpoint to this working tree
   /help                 show this help
   /status               conversation and latest run status
   /memory               bounded memory summary (no prompt contents)

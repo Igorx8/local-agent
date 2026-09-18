@@ -1515,6 +1515,7 @@ Suggested exit codes:
 - AC-105: After a successful `/fix` or complete `/run`, the reviewed checkpoint is materialized as uncommitted changes in the repository working tree from which `local-agent` was started.
 - AC-106: Publication never merges, commits, resets, or changes the current branch; the isolated branch and checkpoint remain the auditable source of the patch.
 - AC-107: Publication fails closed before modifying the repository if its HEAD or working tree changed after preflight, preserving both user work and the isolated checkpoint.
+- AC-108: `/apply [run-id]` explicitly materializes the latest preserved checkpoint from a terminal failed, escalated, or successful run as uncommitted changes, records that failed-run approval was manually bypassed, and never reruns a model, merges, commits, or moves the current branch.
 
 ## 23. Test plan
 
@@ -1767,7 +1768,8 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 - materialize the patch as uncommitted changes in the current working tree, without merge, commit, reset, or branch movement;
 - persist the exact publication patch and metadata with the run artifacts;
 - reject concurrent user changes without overwriting them;
-- test successful publication, HEAD preservation, and concurrent-change refusal for AC-105–AC-107.
+- allow explicit recovery of a preserved terminal-run checkpoint through `/apply [run-id]` without another inference;
+- test successful publication, HEAD preservation, concurrent-change refusal, and failed-run recovery for AC-105–AC-108.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 
