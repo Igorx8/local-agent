@@ -4,7 +4,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight, publishCheckpoint } from "../src/git/workspace.js";
+import { createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight, publishCheckpoint, synchronizePublishedCheckpoint } from "../src/git/workspace.js";
 import { createCheckpoint } from "../src/git/checkpoints.js";
 
 const run = promisify(execFile);
@@ -38,6 +38,10 @@ describe("Git workspace", () => {
     await createWorktree(repo, path.dirname(repo), worktree, "agent/publish-test"); await writeFile(path.join(worktree, "generated.md"), "approved\n"); const checkpoint = await createCheckpoint(worktree, "implementation", 0);
     const result = await publishCheckpoint(repo, baseline, checkpoint.commit, path.join(repo, ".agent-harness", "runs", "publish", "workspace.patch"));
     expect(result.files).toEqual(["generated.md"]); expect((await readFile(path.join(repo, "generated.md"), "utf8"))).toBe("approved\n"); expect((await inspectRepository(repo)).commit).toBe(baseline); expect((await inspectRepository(repo)).dirty).toBe(true);
+  });
+  it("synchronizes a repair after automatic implementation publication", async () => {
+    const repo = await repository(); await ensureHarnessIgnored(repo); const baseline = (await inspectRepository(repo)).commit; const worktree = `${repo}-sync-worktree`; await createWorktree(repo, path.dirname(repo), worktree, "agent/sync-test"); await writeFile(path.join(worktree, "generated.md"), "initial\n"); const initial = await createCheckpoint(worktree, "implementation", 0); await publishCheckpoint(repo, baseline, initial.commit, path.join(repo, ".agent-harness", "initial.patch")); await writeFile(path.join(worktree, "generated.md"), "repaired\n"); const repaired = await createCheckpoint(worktree, "repair", 1);
+    const result = await synchronizePublishedCheckpoint(repo, baseline, initial.commit, repaired.commit, initial.changedFiles, path.join(repo, ".agent-harness", "repair.patch")); expect(result.commit).toBe(repaired.commit); expect(await readFile(path.join(repo, "generated.md"), "utf8")).toBe("repaired\n"); expect((await inspectRepository(repo)).commit).toBe(baseline);
   });
   it("refuses publication when the current working tree changed during the run", async () => {
     const repo = await repository(); await ensureHarnessIgnored(repo); const baseline = (await inspectRepository(repo)).commit; const worktree = `${repo}-blocked-publish-worktree`;

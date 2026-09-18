@@ -73,3 +73,18 @@ export async function publishCheckpoint(repository: string, expectedBaseCommit: 
   if (!files.length) throw new Error("checkpoint publication produced no working-tree changes");
   return { commit: checkpointCommit, files, patchFile: destination };
 }
+
+async function assertWorkingTreeMatchesCheckpoint(repository: string, baselineCommit: string, checkpointCommit: string, expectedFiles: string[]): Promise<void> {
+  const identity = await inspectRepository(repository); if (identity.commit !== baselineCommit) throw new Error(`repository HEAD changed during the run: expected ${baselineCommit}, found ${identity.commit}`);
+  const actualFiles = (await changedFiles(repository)).sort(); const expected = [...expectedFiles].sort(); if (actualFiles.length !== expected.length || expected.some((file, index) => actualFiles[index] !== file)) throw new Error("repository working tree changed after checkpoint publication; preserved checkpoint was not synchronized");
+  for (const file of expected) {
+    const treeEntry = await executeConfigured({ command: "git", args: ["rev-parse", `${checkpointCommit}:${file}`], required: true, timeoutMs: 30_000 }, { cwd: repository });
+    const workingEntry = await executeConfigured({ command: "git", args: ["hash-object", "--", file], required: true, timeoutMs: 30_000 }, { cwd: repository });
+    if (treeEntry.exitCode === 0 ? workingEntry.exitCode !== 0 || workingEntry.stdout.trim() !== treeEntry.stdout.trim() : workingEntry.exitCode === 0) throw new Error(`repository file changed after checkpoint publication: ${file}`);
+  }
+}
+
+export async function synchronizePublishedCheckpoint(repository: string, baselineCommit: string, previousCommit: string, checkpointCommit: string, expectedFiles: string[], patchFile: string): Promise<PublishedCheckpoint> {
+  await assertWorkingTreeMatchesCheckpoint(repository, baselineCommit, previousCommit, expectedFiles);
+  const destination = path.resolve(patchFile); await mkdir(path.dirname(destination), { recursive: true }); await git(repository, ["diff", "--binary", `--output=${destination}`, previousCommit, checkpointCommit, "--"]); await git(repository, ["apply", "--check", destination]); await git(repository, ["apply", destination]); const files = await changedFiles(repository); return { commit: checkpointCommit, files, patchFile: destination };
+}

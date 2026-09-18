@@ -1512,7 +1512,7 @@ Suggested exit codes:
 
 ### Current-worktree publication
 
-- AC-105: After a successful `/fix` or complete `/run`, the reviewed checkpoint is materialized as uncommitted changes in the repository working tree from which `local-agent` was started.
+- AC-105: `/fix` materializes its first implementation checkpoint immediately as uncommitted changes in the repository working tree from which `local-agent` was started, and synchronizes a later repair checkpoint; `/run` materializes its reviewed checkpoint after success.
 - AC-106: Publication never merges, commits, resets, or changes the current branch; the isolated branch and checkpoint remain the auditable source of the patch.
 - AC-107: Publication fails closed before modifying the repository if its HEAD or working tree changed after preflight, preserving both user work and the isolated checkpoint.
 - AC-108: `/apply [run-id]` explicitly materializes the latest preserved checkpoint from a terminal failed, escalated, or successful run as uncommitted changes, records that failed-run approval was manually bypassed, and never reruns a model, merges, commits, or moves the current branch.
@@ -1763,7 +1763,8 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 ### Milestone 16: current-worktree publication
 
 - preserve isolated implementation, gates, review, checkpoint, and recovery evidence;
-- after `/fix` or `/run` succeeds, generate a patch from the exact preflight commit to the approved checkpoint;
+- publish the first `/fix` implementation checkpoint immediately, retain it even if later review fails, and synchronize an approved repair incrementally;
+- after `/run` succeeds, generate a patch from the exact preflight commit to the approved checkpoint;
 - validate the patch and recheck the repository HEAD and cleanliness before applying it;
 - materialize the patch as uncommitted changes in the current working tree, without merge, commit, reset, or branch movement;
 - persist the exact publication patch and metadata with the run artifacts;
