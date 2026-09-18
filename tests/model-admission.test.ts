@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { assertModelAdmission, parseLlamaDecodedTokens } from "../src/models/resources.js";
+import { assertModelAdmission, isBlockingCudaProcess, parseLlamaDecodedTokens } from "../src/models/resources.js";
 import { ProcessModelManager } from "../src/models/process-adapter.js";
 
 const limits = { requiredRamMiB: 20_000, maxSwapUsedMiB: 1024, maxVramUsedMiB: 2048, blockForeignCuda: true };
@@ -7,6 +7,12 @@ const limits = { requiredRamMiB: 20_000, maxSwapUsedMiB: 1024, maxVramUsedMiB: 2
 describe("model resource admission", () => {
   it("accepts a quiet host with sufficient RAM", () => {
     expect(() => assertModelAdmission("coder", { ramAvailableMiB: 24_000, swapUsedMiB: 0, vramUsedMiB: 600, cudaProcesses: [] }, limits)).not.toThrow();
+  });
+
+  it("allows desktop GPU clients while retaining compute-workload blocking", () => {
+    for (const name of ["ptyxis", "/usr/bin/gnome-shell", "Xwayland", "Xorg", "/opt/llama.cpp/llama-server"]) expect(isBlockingCudaProcess(name)).toBe(false);
+    for (const name of ["python", "/opt/ComfyUI/python", "blender", "unknown-worker"]) expect(isBlockingCudaProcess(name)).toBe(true);
+    expect(() => assertModelAdmission("coder", { ramAvailableMiB: 24_000, swapUsedMiB: 0, vramUsedMiB: 600, cudaProcesses: [{ pid: 54813, name: "ptyxis" }] }, limits)).not.toThrow();
   });
 
   it.each([

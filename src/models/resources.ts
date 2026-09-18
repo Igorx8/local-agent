@@ -18,6 +18,9 @@ export function vramReleaseProbe(thresholdMiB: number): () => Promise<boolean> {
 export interface ModelAdmissionSnapshot { ramAvailableMiB: number; swapUsedMiB: number; vramUsedMiB: number; cudaProcesses: Array<{ pid: number; name: string }>; }
 export interface ModelAdmissionLimits { requiredRamMiB: number; maxSwapUsedMiB: number; maxVramUsedMiB: number; blockForeignCuda: boolean; }
 
+const desktopGpuProcesses = new Set(["ptyxis", "gnome-shell", "Xwayland", "Xorg"]);
+export function isBlockingCudaProcess(name: string): boolean { const executable = name.split("/").at(-1) ?? name; return !["llama", "llama-server"].includes(executable) && !desktopGpuProcesses.has(executable); }
+
 function meminfoMiB(text: string, key: string): number {
   const value = Number(text.match(new RegExp(`^${key}:\\s+(\\d+)`, "m"))?.[1]);
   if (!Number.isFinite(value)) throw new Error(`/proc/meminfo did not contain ${key}`);
@@ -41,7 +44,7 @@ export function assertModelAdmission(alias: string, snapshot: ModelAdmissionSnap
   if (snapshot.ramAvailableMiB < limits.requiredRamMiB) reasons.push(`RAM available ${snapshot.ramAvailableMiB.toFixed(0)} MiB is below required ${limits.requiredRamMiB.toFixed(0)} MiB`);
   if (snapshot.swapUsedMiB > limits.maxSwapUsedMiB) reasons.push(`swap used ${snapshot.swapUsedMiB.toFixed(0)} MiB exceeds ${limits.maxSwapUsedMiB} MiB`);
   if (snapshot.vramUsedMiB > limits.maxVramUsedMiB) reasons.push(`VRAM used ${snapshot.vramUsedMiB.toFixed(0)} MiB exceeds ${limits.maxVramUsedMiB} MiB`);
-  const foreign = snapshot.cudaProcesses.filter((item) => !["llama", "llama-server"].includes(item.name.split("/").at(-1) ?? item.name));
+  const foreign = snapshot.cudaProcesses.filter((item) => isBlockingCudaProcess(item.name));
   if (limits.blockForeignCuda && foreign.length) reasons.push(`foreign CUDA process(es): ${foreign.map((item) => `${item.name}(${item.pid})`).join(", ")}`);
   if (reasons.length) throw new Error(`model admission blocked for ${alias}: ${reasons.join("; ")}. Stop heavy workloads or adjust explicit runtime thresholds.`);
 }
