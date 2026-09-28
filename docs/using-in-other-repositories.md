@@ -22,6 +22,8 @@ Perguntas simples usam uma inferência somente leitura. Use `/ask` para forçar 
 /ask como este projeto está organizado?
 /ask explique @README.md
 /ask --web resuma https://example.com/documentacao
+/check verifique problemas em @src/service.ts
+/doc transforme @plano.md em um índice em tasks/README.md
 /fix corrija o erro localizado em @src/service.ts
 /run implemente a primeira etapa de @plano.md
 /apply fix-20260918181332-7912e5fc

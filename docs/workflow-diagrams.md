@@ -9,6 +9,8 @@ diagramas descrevem o comportamento implementado atualmente.
 flowchart TD
     A[Entrada no local-agent] --> B{Comando explícito?}
     B -->|/ask| ASK[Consulta somente leitura]
+    B -->|/check| CHECK[Inspeção focada somente leitura]
+    B -->|/doc| DOC[Transformação de Markdown]
     B -->|/fix| FIX[Correção focada]
     B -->|/run| RUN[Workflow completo]
     B -->|Não| C{Parece uma pergunta?}
@@ -19,6 +21,37 @@ flowchart TD
 O roteamento automático nunca escolhe `/fix`. Uma mutação focada exige o
 comando explícito; pedidos de ação comuns seguem o caminho mais conservador do
 `/run`.
+
+O mesmo vale para `/doc`: somente o comando explícito autoriza a transformação
+documental. `/check` nunca concede permissão de escrita.
+
+## `/check`: inspeção focada
+
+```mermaid
+flowchart TD
+    A[Receber questão de inspeção] --> B[Resolver referências @arquivo]
+    B --> C[Carregar qwen36-main]
+    C --> D[Inspecionar sem ferramentas mutáveis]
+    D --> E[Relatar findings com evidências]
+    E --> F[Descarregar modelo]
+```
+
+## `/doc`: transformação documental
+
+```mermaid
+flowchart TD
+    A[Receber tarefa documental] --> B[Baseline e gates]
+    B --> C[Editar diretamente na raiz]
+    C --> D{Somente arquivos Markdown?}
+    D -->|Não| X[Falhar fechado]
+    D -->|Sim| E[Validar declarações estruturadas]
+    E -->|Duplicadas| X
+    E -->|Válidas| F[Gates do repositório]
+    F --> G[Revisão independente]
+    G -->|Sem blocker| H[Sucesso]
+    G -->|Blocker confirmado| I[Um reparo e nova validação]
+    I --> F
+```
 
 ## `/ask`: pergunta rápida
 
@@ -121,6 +154,8 @@ flowchart LR
 | Entrada | Pode alterar arquivos | Local durante a execução | Visibilidade na IDE |
 | --- | --- | --- | --- |
 | `/ask` | Não | Raiz, somente leitura | Não altera |
+| `/check` | Não | Raiz, somente leitura | Não altera |
+| `/doc` | Sim, somente Markdown | Raiz atual | Imediata |
 | `/fix` | Sim | Raiz atual | Imediata |
 | `/run` | Sim | Worktree isolado | Após sucesso e publicação |
 | Pergunta em texto comum | Não | Mesmo fluxo de `/ask` | Não altera |
@@ -149,4 +184,3 @@ de carregar um modelo quando o driver estiver indisponível ou um reboot estiver
 pendente. Isso reduz o risco, mas não substitui um desligamento completo após
 uma GPU entrar em estado inválido e não impede falhas externas do kernel,
 firmware ou hardware.
-

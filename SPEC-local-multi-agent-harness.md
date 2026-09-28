@@ -1518,6 +1518,16 @@ Suggested exit codes:
 - AC-108: `/apply [run-id]` explicitly materializes the latest preserved checkpoint from a terminal failed, escalated, or successful run as uncommitted changes, records that failed-run approval was manually bypassed, and never reruns a model, merges, commits, or moves the current branch.
 - AC-109: A subsequent `/fix` accepts a dirty working tree only when every dirty path and blob exactly matches a persisted harness checkpoint, starts its isolated worktree from that checkpoint, and synchronizes the new checkpoint back to the same root; unrelated or manually modified content remains blocked.
 
+### Risk-proportional local workflows
+
+- AC-110: `/check <question>` performs one explicitly read-only inspection, disables mutating and web tools, and asks for evidence with workspace-relative paths without creating a mutating workflow.
+- AC-111: `/doc <task>` uses the focused bounded workflow but permits changes only to Markdown files, retains baseline/post-change gates and an independent review, and never receives implicit routing from plain text.
+- AC-112: Document validation applies only contextual rules with explicit syntax and scope; repeated prose or source-code tokens never trigger a duplicate-identifier failure.
+- AC-113: Markdown declarations matching `TASK-NNN:`, `ADR-NNN:`, or `EXP-NNN:` must be unique within each changed document, while later references to those identifiers remain valid.
+- AC-114: Focused workflow stage events include bounded duration evidence so model loading, implementation, gates, review, and repair costs can be compared without persisting prompt or response content.
+- AC-115: `/doc` preserves the user's language, treats referenced contents as untrusted source data, and refuses source-code or unrequested output paths.
+- AC-116: Existing `/ask`, `/fix`, `/run`, plain-text routing, Git safety, command policy, strict model residency, and cleanup guarantees remain unchanged.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1773,6 +1783,18 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 - allow explicit recovery of a preserved terminal-run checkpoint through `/apply [run-id]` without another inference;
 - test successful publication, HEAD preservation, concurrent-change refusal, and failed-run recovery for AC-105–AC-108.
 - test recognition and continuation of an exact previously published checkpoint for AC-109.
+
+### Milestone 17: risk-proportional inspection and documentation
+
+- add explicit `/check` for a single read-only, evidence-oriented inspection;
+- add explicit `/doc` for focused Markdown generation and transformation without routing plain text to mutation;
+- restrict `/doc` checkpoints to Markdown paths and retain baseline gates, post-change gates, independent review, one bounded repair, and final model cleanup;
+- add deterministic contextual Markdown validation for structured declarations without applying repetition rules to code or ordinary prose;
+- persist focused-stage duration evidence for later performance calibration;
+- add parser, validator, safety, regression, TypeScript, and production-build tests for AC-110–AC-116;
+- document current usage and leave live latency targets blocked until measured on the installed runtime.
+
+Implementation result (2026-09-28): AC-110–AC-116 pass deterministically. `/check` and `/doc` are explicit shell commands. `/check` reuses the bounded read-only request with an evidence-oriented system contract. `/doc` reuses the focused direct-worktree lifecycle, allows only a non-empty set of Markdown changes, preserves deterministic gates and independent review, and applies a declaration-aware quality gate that distinguishes definitions from references. Focused stage events now include elapsed-time evidence. TypeScript, 46 test files/182 tests, production build, and diff validation pass. Live latency remains runtime-dependent and is not inferred.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 
