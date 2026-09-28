@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { createWorktree, ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, preflight, publishCheckpoint, synchronizePublishedCheckpoint } from "../src/git/workspace.js";
-import { createCheckpoint } from "../src/git/checkpoints.js";
+import { createCheckpoint, createDetachedCheckpoint } from "../src/git/checkpoints.js";
 
 const run = promisify(execFile);
 async function repository(): Promise<string> {
@@ -32,6 +32,9 @@ describe("Git workspace", () => {
     const checkpoint = await createCheckpoint(worktree, "implementation", 0);
     expect(checkpoint.changedFiles).toEqual(["implementation.txt"]);
     expect(checkpoint.commit).toHaveLength(40);
+  });
+  it("captures dirty root files without moving HEAD or staging user work", async () => {
+    const repo = await repository(); const head = (await inspectRepository(repo)).commit; await writeFile(path.join(repo, "direct.txt"), "agent output\n"); const checkpoint = await createDetachedCheckpoint(repo, head, "focused-fix", 0); expect(checkpoint.changedFiles).toEqual(["direct.txt"]); expect((await inspectRepository(repo)).commit).toBe(head); expect((await run("git", ["diff", "--cached", "--name-only"], { cwd: repo })).stdout.trim()).toBe(""); expect((await run("git", ["show", `${checkpoint.commit}:direct.txt`], { cwd: repo })).stdout).toBe("agent output\n");
   });
   it("publishes an approved checkpoint as uncommitted changes in the current working tree", async () => {
     const repo = await repository(); await ensureHarnessIgnored(repo); const baseline = (await inspectRepository(repo)).commit; const worktree = `${repo}-publish-worktree`;
