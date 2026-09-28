@@ -9,7 +9,6 @@ diagramas descrevem o comportamento implementado atualmente.
 flowchart TD
     A[Entrada no local-agent] --> B{Comando explícito?}
     B -->|/ask| ASK[Consulta somente leitura]
-    B -->|/check| CHECK[Inspeção focada somente leitura]
     B -->|/doc| DOC[Transformação de Markdown]
     B -->|/fix| FIX[Correção focada]
     B -->|/run| RUN[Workflow completo]
@@ -23,18 +22,7 @@ comando explícito; pedidos de ação comuns seguem o caminho mais conservador d
 `/run`.
 
 O mesmo vale para `/doc`: somente o comando explícito autoriza a transformação
-documental. `/check` nunca concede permissão de escrita.
-
-## `/check`: inspeção focada
-
-```mermaid
-flowchart TD
-    A[Receber questão de inspeção] --> B[Resolver referências @arquivo]
-    B --> C[Carregar qwen36-main]
-    C --> D[Inspecionar sem ferramentas mutáveis]
-    D --> E[Relatar findings com evidências]
-    E --> F[Descarregar modelo]
-```
+documental. Inspeções permanecem no `/ask`, sempre sem permissão de escrita.
 
 ## `/doc`: transformação documental
 
@@ -154,7 +142,6 @@ flowchart LR
 | Entrada | Pode alterar arquivos | Local durante a execução | Visibilidade na IDE |
 | --- | --- | --- | --- |
 | `/ask` | Não | Raiz, somente leitura | Não altera |
-| `/check` | Não | Raiz, somente leitura | Não altera |
 | `/doc` | Sim, somente Markdown | Raiz atual | Imediata |
 | `/fix` | Sim | Raiz atual | Imediata |
 | `/run` | Sim | Worktree isolado | Após sucesso e publicação |

@@ -87,7 +87,6 @@ Dentro da sessão, escreva normalmente:
 ```text
 you> como este projeto está organizado?
 you> /ask explique @README.md
-you> /check verifique possíveis erros em @src/service.ts
 you> /doc transforme @plano.md em um índice em tasks/README.md
 you> /fix corrija o erro em @src/service.ts
 you> /run implemente a primeira etapa de @docs/plano.md
@@ -105,7 +104,6 @@ Referências aceitas:
 | --- | --- | --- |
 | Pergunta comum ou `/ask` | resposta rápida e leitura de arquivos | não altera arquivos |
 | `/ask --web URL` | leitura controlada de uma URL explícita | não altera arquivos |
-| `/check` | inspeção focada com evidências | não altera arquivos |
 | `/doc` | geração ou transformação focada de Markdown | altera somente arquivos `.md` |
 | `/fix` | mudança pequena e localizada, com gates e revisão | edita diretamente o repositório aberto |
 | Pedido de ação comum ou `/run` | workflow completo e auditado | publica na raiz somente após aprovação |
@@ -116,7 +114,6 @@ Use `/help` dentro da sessão para ver todos os comandos. Os mais úteis são:
 /help
 /status
 /ask <pergunta>
-/check <inspeção>
 /doc <tarefa documental>
 /fix <tarefa pequena>
 /run <tarefa completa>

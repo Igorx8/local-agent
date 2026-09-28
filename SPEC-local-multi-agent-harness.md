@@ -1520,7 +1520,7 @@ Suggested exit codes:
 
 ### Risk-proportional local workflows
 
-- AC-110: `/check <question>` performs one explicitly read-only inspection, disables mutating and web tools, and asks for evidence with workspace-relative paths without creating a mutating workflow.
+- AC-110: `/ask` also accepts explicit inspection requests, remains strictly read-only, and asks for evidence with workspace-relative paths without creating a second redundant command or mutating workflow.
 - AC-111: `/doc <task>` uses the focused bounded workflow but permits changes only to Markdown files, retains baseline/post-change gates and an independent review, and never receives implicit routing from plain text.
 - AC-112: Document validation applies only contextual rules with explicit syntax and scope; repeated prose or source-code tokens never trigger a duplicate-identifier failure.
 - AC-113: Markdown declarations matching `TASK-NNN:`, `ADR-NNN:`, or `EXP-NNN:` must be unique within each changed document, while later references to those identifiers remain valid.
@@ -1786,7 +1786,7 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 
 ### Milestone 17: risk-proportional inspection and documentation
 
-- add explicit `/check` for a single read-only, evidence-oriented inspection;
+- extend `/ask` to cover evidence-oriented inspections without adding a redundant read-only command;
 - add explicit `/doc` for focused Markdown generation and transformation without routing plain text to mutation;
 - restrict `/doc` checkpoints to Markdown paths and retain baseline gates, post-change gates, independent review, one bounded repair, and final model cleanup;
 - add deterministic contextual Markdown validation for structured declarations without applying repetition rules to code or ordinary prose;
@@ -1794,7 +1794,7 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 - add parser, validator, safety, regression, TypeScript, and production-build tests for AC-110–AC-116;
 - document current usage and leave live latency targets blocked until measured on the installed runtime.
 
-Implementation result (2026-09-28): AC-110–AC-116 pass deterministically. `/check` and `/doc` are explicit shell commands. `/check` reuses the bounded read-only request with an evidence-oriented system contract. `/doc` reuses the focused direct-worktree lifecycle, allows only a non-empty set of Markdown changes, preserves deterministic gates and independent review, and applies a declaration-aware quality gate that distinguishes definitions from references. Focused stage events now include elapsed-time evidence. TypeScript, 46 test files/182 tests, production build, and diff validation pass. Live latency remains runtime-dependent and is not inferred.
+Implementation result (2026-09-28): AC-110–AC-116 pass deterministically. `/ask` handles both explanations and evidence-oriented inspections through one bounded read-only request. `/doc` is the only new explicit command and reuses the focused direct-worktree lifecycle, allows only a non-empty set of Markdown changes, preserves deterministic gates and independent review, and applies a declaration-aware quality gate that distinguishes definitions from references. Focused stage events include elapsed-time evidence. TypeScript, 46 test files/182 tests, production build, and diff validation pass. Live latency remains runtime-dependent and is not inferred.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 
