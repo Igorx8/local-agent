@@ -1,10 +1,9 @@
-export const slashCommands = ["ask", "doc", "fix", "run", "apply", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
+export const slashCommands = ["ask", "fix", "run", "apply", "help", "status", "memory", "files", "worktree", "model", "doctor", "report", "new", "resume", "pause", "handoff", "clear", "exit"] as const;
 export type SlashCommandName = (typeof slashCommands)[number];
 export interface SlashCommand { name: SlashCommandName; args: string[]; web?: boolean; }
 
 export const shellHelp = `Slash commands:
   /ask [--web] <text>   one fast read-only answer
-  /doc <task>           focused Markdown transformation
   /fix <task>           focused fix with gates and review
   /run <task>           complete audited engineering workflow
   /apply [run-id]       apply a preserved checkpoint to this working tree
@@ -34,14 +33,20 @@ function argv(value: string): string[] {
 export function parseSlashCommand(value: string): SlashCommand | undefined {
   const trimmed = value.trim(); if (!trimmed.startsWith("/")) return undefined; const match = trimmed.match(/^\/(\S+)(?:\s+([\s\S]*))?$/); const name = match?.[1];
   if (!name || !slashCommands.includes(name as SlashCommandName)) throw new Error(`unknown slash command: /${name ?? ""}; use /help`);
-  if (["ask", "doc", "fix", "run"].includes(name)) { let prompt = (match?.[2] ?? "").trim(); let web = false; if (name === "ask" && /^(?:--web)(?:\s|$)/.test(prompt)) { web = true; prompt = prompt.replace(/^--web(?:\s+|$)/, ""); } if (!prompt) throw new Error(`/${name} requires a prompt`); return { name: name as SlashCommandName, args: [prompt], ...(web ? { web } : {}) }; }
+  if (["ask", "fix", "run"].includes(name)) { let prompt = (match?.[2] ?? "").trim(); let web = false; if (name === "ask" && /^(?:--web)(?:\s|$)/.test(prompt)) { web = true; prompt = prompt.replace(/^--web(?:\s+|$)/, ""); } if (!prompt) throw new Error(`/${name} requires a prompt`); return { name: name as SlashCommandName, args: [prompt], ...(web ? { web } : {}) }; }
   const parts = argv(match?.[2] ?? "");
   const noArguments: SlashCommandName[] = ["help", "status", "memory", "files", "worktree", "model", "doctor", "new", "clear", "exit"];
   if (noArguments.includes(name as SlashCommandName) && parts.length) throw new Error(`/${name} does not accept arguments`); if (parts.length > 1) throw new Error(`/${name} accepts at most one run ID`);
   return { name: name as SlashCommandName, args: parts };
 }
 
-export function routePlainInput(value: string): "ask" | "run" { return /\?\s*$/.test(value) || /^(?:quem|qual|quais|quando|onde|por\s+que|porque|como|o\s+que|você|voce|vc|can|could|what|why|how|when|where|who)\b/i.test(value.trim()) ? "ask" : "run"; }
+export function routePlainInput(value: string): "ask" | "doc" | "run" {
+  const input = value.trim();
+  if (/\?\s*$/.test(input) || /^(?:quem|qual|quais|quando|onde|por\s+que|porque|como|o\s+que|você|voce|vc|can|could|what|why|how|when|where|who)\b/i.test(input)) return "ask";
+  const mutating = /\b(?:crie|criar|gere|gerar|escreva|produza|atualize|reorganize|resuma|transforme|documente|create|generate|write|update|reorganize|summarize|transform|document)\b/i.test(input);
+  const documentary = /(?:@[^\s]+\.md\b|\b[\w./-]+\.md\b|\bmarkdown\b|\bdocumenta(?:ção|cao)\b|\bíndice\b|\bREADME\b)/i.test(input);
+  return mutating && documentary ? "doc" : "run";
+}
 
 export function completeSlash(line: string): [string[], string] {
   const token = line.trimStart(); if (!token.startsWith("/") || token.includes(" ")) return [[], line]; const matches = slashCommands.map((name) => `/${name}`).filter((name) => name.startsWith(token)); return [matches.length ? matches : slashCommands.map((name) => `/${name}`), token];

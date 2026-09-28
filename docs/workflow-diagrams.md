@@ -9,22 +9,24 @@ diagramas descrevem o comportamento implementado atualmente.
 flowchart TD
     A[Entrada no local-agent] --> B{Comando explícito?}
     B -->|/ask| ASK[Consulta somente leitura]
-    B -->|/doc| DOC[Transformação de Markdown]
     B -->|/fix| FIX[Correção focada]
     B -->|/run| RUN[Workflow completo]
     B -->|Não| C{Parece uma pergunta?}
     C -->|Sim| ASK
-    C -->|Não ou ação ambígua| RUN
+    C -->|Não| D{Ação claramente documental?}
+    D -->|Sim| DOC[Transformação de Markdown]
+    D -->|Não ou ambígua| RUN
 ```
 
 O roteamento automático nunca escolhe `/fix`. Uma mutação focada exige o
 comando explícito; pedidos de ação comuns seguem o caminho mais conservador do
 `/run`.
 
-O mesmo vale para `/doc`: somente o comando explícito autoriza a transformação
-documental. Inspeções permanecem no `/ask`, sempre sem permissão de escrita.
+Uma ação documental só recebe o perfil restrito quando regras determinísticas
+identificam ao mesmo tempo intenção de escrita e alvo Markdown. Em caso de
+dúvida, o pedido segue o `/run`. Inspeções permanecem no `/ask`, sem escrita.
 
-## `/doc`: transformação documental
+## Transformação documental automática
 
 ```mermaid
 flowchart TD
@@ -142,7 +144,7 @@ flowchart LR
 | Entrada | Pode alterar arquivos | Local durante a execução | Visibilidade na IDE |
 | --- | --- | --- | --- |
 | `/ask` | Não | Raiz, somente leitura | Não altera |
-| `/doc` | Sim, somente Markdown | Raiz atual | Imediata |
+| Ação documental clara | Sim, somente Markdown | Raiz atual | Imediata |
 | `/fix` | Sim | Raiz atual | Imediata |
 | `/run` | Sim | Worktree isolado | Após sucesso e publicação |
 | Pergunta em texto comum | Não | Mesmo fluxo de `/ask` | Não altera |
