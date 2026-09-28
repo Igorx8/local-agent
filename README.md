@@ -1,81 +1,142 @@
-# Local Multi-Agent Engineering Harness
+# Local Agent
 
-Local-only engineering orchestrator using OpenCode and llama.cpp. Milestones 0–13 are implemented, including persistent workspace conversations, audited isolated runs, strict single-model GPU residency, explicit file references, live IDE progress, and a Claude-like interactive shell.
-Milestone 11 operational validation is documented in [docs/milestone-11-operational-validation.md](docs/milestone-11-operational-validation.md).
+Agente de programação local para uso no terminal integrado da IDE. Ele combina
+OpenCode e modelos executados pelo llama.cpp, mantém contexto entre prompts e
+oferece uma interface interativa semelhante às CLIs do Claude e do Codex.
 
-Para executar o agente em outros projetos pela IDE, consulte [Usando o harness em outros repositórios](docs/using-in-other-repositories.md).
+Todo processamento de modelo é local. O agente não configura provedores de
+modelos em nuvem e nunca faz merge ou commit automático na branch do projeto.
 
-## Where it runs
+## Objetivo do projeto
 
-The harness source lives in this repository, but the installed command targets the Git workspace containing the current directory. It works from the repository root or any nested package in a monorepo. Each run creates an isolated `agent/<run-id>-<slug>` branch/worktree and stores auditable artifacts under `.agent-harness/runs/<run-id>/` in the target project. It never merges into the default branch.
+O projeto nasceu para oferecer um harness de engenharia seguro e operacional
+que rode inteiramente na máquina do usuário. A proposta é proporcionar uma
+experiência prática próxima à de agentes como Claude Code e Codex, preservando
+controle sobre os modelos, o código e os recursos do computador.
 
-For IDE use, open the project you want to change and run the installed `harness` CLI in the integrated terminal (or a future IDE task). OpenCode provides agent sessions and tools; this harness owns deterministic stage transitions, permissions, gates, evidence, and recovery.
+O harness coordena planejamento, implementação, testes e revisões com modelos
+locais, mantém evidências auditáveis e aplica limites explícitos de escopo,
+tempo e recursos. Em máquinas com VRAM limitada, somente um modelo grande pode
+ficar carregado por vez; uma troca só ocorre depois que o modelo anterior foi
+encerrado e seus recursos foram liberados.
 
-## Foundation setup
+As proteções operacionais existem para evitar alterações fora do repositório,
+execução insegura de comandos, perda de trabalho, publicação automática na
+branch atual e sobrecarga previsível de RAM ou GPU. Quando uma condição não pode
+ser comprovada com segurança, o comportamento esperado é interromper a operação
+e informar o bloqueio, em vez de presumir que o ambiente está saudável.
 
-```bash
-npm install
-cp config/harness.example.yaml config/harness.yaml
-npm run dev -- model prepare
-npm run check
-npm test
-npm run dev -- doctor --config config/harness.yaml
-```
+## Requisitos
 
-With OpenCode and the llama.cpp router running, open any personal project in the IDE and use its integrated terminal:
+- Ubuntu ou outra distribuição Linux compatível;
+- Git;
+- Node.js 22 ou superior;
+- OpenCode 1.18.25 ou versão compatível;
+- llama.cpp com o executável `llama-server`;
+- GPU NVIDIA compatível e driver CUDA funcional;
+- espaço em RAM e VRAM suficiente para manter um modelo por vez;
+- os modelos locais registrados como `qwen36-main` e `qwen3-coder-impl`;
+- variável persistente `LLAMA_API_KEY` configurada no shell.
 
-```bash
-harness --new "adicione validação, testes e atualize a documentação"
-harness --new 'implemente o plano em @docs/plano.md'
-harness continue "agora cubra também os casos de erro"
-harness chat
-harness status
-harness logs <run-id> --follow
-```
+O computador usado no desenvolvimento possui uma RTX 5060 Ti de 16 GB. Outras
+configurações precisam respeitar os limites de memória definidos na configuração
+local.
 
-For the simplest interactive experience, the convenience command manages OpenCode when necessary and opens the current workspace directly:
+Depois de atualizar kernel ou driver NVIDIA, reinicie o computador antes de
+usar o agente. Confirme primeiro que `nvidia-smi` funciona normalmente.
+
+## Preparação inicial
+
+Dentro deste repositório:
 
 ```fish
-cd /path/to/project
+npm install
+npm run build
+npm link
+npm run dev -- model prepare
+```
+
+`model prepare` localiza e registra modelos que já existem no cache local. Ele
+não baixa modelos nem escolhe substitutos automaticamente.
+
+Valide a instalação:
+
+```fish
+harness doctor --json
+```
+
+Avisos sobre adaptadores opcionais são esperados. Itens `blocked` relacionados
+ao modelo ou à GPU devem ser resolvidos antes de iniciar uma tarefa que use
+inferência.
+
+## Uso diário
+
+Abra o terminal da IDE no repositório em que deseja trabalhar e execute:
+
+```fish
+cd /caminho/do/projeto
 local-agent
 ```
 
-Type normal requests or `/help`; no harness subcommand is required inside this shell.
+O comando encontra a raiz Git, verifica o ambiente, inicia ou reutiliza o
+OpenCode local e gerencia o carregamento e descarregamento dos modelos. Não é
+necessário iniciar o llama.cpp manualmente.
 
-`run` is the default command, `--repo` defaults to the containing Git root, and an inline task replaces the requirement-file ceremony. The first command creates a conversation; later `run` or `continue` commands select the latest conversation in that Git workspace unless `--new` or `--conversation <id>` is supplied. `chat` provides a multi-prompt TTY loop with `/status`, `/memory`, and `/exit`. Existing explicit usage remains supported with `harness run --repo /path --requirements requirements.md --config harness.yaml`. Configuration discovery checks `--config`, `HARNESS_CONFIG`, `.agent-harness/harness.yaml`, `config/harness.yaml`, and finally the packaged local configuration, in that order.
+Dentro da sessão, escreva normalmente:
 
-Conversation memory survives terminal and IDE restarts under `.agent-harness/conversations/<conversation-id>/`. It is bounded and deterministically compacted; it is not an indefinitely retained model chat session. Every prompt still creates a fresh audited run and fresh role/reviewer sessions. A successful next turn starts from the exact commit produced by the previous turn, in a new isolated worktree. The command prints that worktree path so it can be opened in the IDE. No conversation turn is merged into the project's default branch automatically.
+```text
+you> como este projeto está organizado?
+you> /ask explique @README.md
+you> /fix corrija o erro em @src/service.ts
+you> /run implemente a primeira etapa de @docs/plano.md
+```
 
-`resume` reconciles persisted state with Git and classifies a clean pre-edit restart, a matching checkpoint, or manual reconciliation. Dirty editing work is never reset or discarded. `abort` writes a cooperative pause request consumed between workflow stages, and `report` creates a SHA-256 artifact index plus human-readable recovery summary.
+Referências aceitas:
 
-While a run is active, `harness handoff <run-id> --repo /absolute/project` requests a manual handoff at the next safe model-action boundary.
+- `@arquivo` inclui um arquivo no prompt;
+- `@"caminho com espaços.md"` inclui um caminho com espaços;
+- `@@` representa um `@` literal.
 
-`model prepare` resolves the two exact Hugging Face cache artifacts, fingerprints them, and generates ignored `config/models.local.yaml`, `config/models.local.ini`, and `config/opencode.local.json` files. It never downloads or substitutes a model. Export `LLAMA_API_KEY` outside the repository, then use `harness model list|status|start|switch|smoke|stop` for manual IDE diagnostics. Stable aliases—not role names—are sent to llama.cpp.
+## Modos principais
 
-Only one large model may reside in VRAM. A role change finishes its response and any validated handoff, confirms the previous alias is unloaded, waits for NVIDIA VRAM usage to fall to `runtime.modelUnloadVramThresholdMiB`, and only then loads the next alias. `modelShutdownTimeoutMs` fails closed: the next model is not started if resources remain occupied. The last model is unloaded when the workflow exits.
+| Entrada | Uso | Escrita |
+| --- | --- | --- |
+| Pergunta comum ou `/ask` | resposta rápida e leitura de arquivos | não altera arquivos |
+| `/ask --web URL` | leitura controlada de uma URL explícita | não altera arquivos |
+| `/fix` | mudança pequena e localizada, com gates e revisão | edita diretamente o repositório aberto |
+| Pedido de ação comum ou `/run` | workflow completo e auditado | publica na raiz somente após aprovação |
 
-The exit code is `0` only when required prerequisites pass. Missing OpenCode/llama.cpp runtimes are displayed as `BLOCKED` and exit with code `4`; invalid configuration exits with code `2`. This makes `doctor` suitable for CI/setup checks without hiding an incomplete machine setup.
+Use `/help` dentro da sessão para ver todos os comandos. Os mais úteis são:
 
-See [compatibility report](docs/compatibility-report.md) and [implementation plan](docs/implementation-plan.md).
+```text
+/help
+/status
+/ask <pergunta>
+/fix <tarefa pequena>
+/run <tarefa completa>
+/pause
+/resume
+/new
+/exit
+```
 
-Project-specific advanced verification commands use normalized, fail-closed adapters documented in [Milestone 5 advanced verification](docs/milestone-5-verification.md). The harness never guesses a test or mutation tool for the target repository.
+`Ctrl+D` ou `/exit` encerra a sessão. O `local-agent` também encerra os serviços
+e modelos que ele próprio iniciou.
 
-Context accounting, deterministic Markdown handoffs, semantic abstraction boundaries, bootstrap verification, and the emergency compaction fallback are documented in [Milestone 6 context continuity](docs/milestone-6-context-continuity.md).
+## Arquivos gerados no projeto
 
-Dashboard sections, JSONL events, machine-metric behavior, and IDE/non-TTY usage are documented in [Milestone 7 visual feedback](docs/milestone-7-visual-feedback.md).
+O agente armazena memória limitada, relatórios, checkpoints e evidências em:
 
-Explicit `@arquivo` references, security limits, Fish quoting, and immediate human/JSONL progress are documented in [Milestone 12 file references and progress](docs/milestone-12-file-references-and-progress.md).
+```text
+.agent-harness/
+```
 
-Zero-argument startup, managed OpenCode ownership, slash commands, completion, history, and cleanup are documented in [Milestone 13 interactive shell](docs/milestone-13-interactive-shell.md).
+Esses artefatos permitem acompanhar, retomar e auditar operações. O agente não
+cria commits na branch atual nem faz merge automático.
 
-Fast read-only questions, controlled web reads, deterministic routing, and the complete `/run` workflow are documented in [Milestone 14 fast ask](docs/milestone-14-fast-ask.md).
+## Documentação
 
-Small mutating changes with baseline, gates, focused review, and one bounded repair are documented in [Milestone 15 focused fix](docs/milestone-15-focused-fix.md).
-
-Recovery, security, reproducibility, E2E evidence, and remaining runtime-dependent validation are documented in [Milestone 8 hardening](docs/milestone-8-hardening.md).
-
-Persistent multi-prompt sessions, bounded memory, IDE commands, and fail-closed continuation are documented in [Milestone 9 conversations](docs/milestone-9-conversations.md).
-
-Strict sequential model unload/load behavior and handoff ordering are documented in [Milestone 10 single-model residency](docs/milestone-10-single-model.md).
-
-The optional local runtime and all three production role models have been validated sequentially on the target RTX 5060 Ti. See [Milestone 3 live validation](docs/milestone-3-validation.md) for versions, fingerprints and evidence.
+- [Fluxos e diagramas](docs/workflow-diagrams.md)
+- [Uso em outros repositórios](docs/using-in-other-repositories.md)
+- [Compatibilidade do ambiente](docs/compatibility-report.md)
+- [Especificação completa](SPEC-local-multi-agent-harness.md)
