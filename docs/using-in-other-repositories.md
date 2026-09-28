@@ -2,6 +2,9 @@
 
 O `harness` pode ser executado em qualquer projeto pessoal versionado com Git. Não é necessário copiar o código do agente para cada projeto.
 
+Para uma visão rápida das fases, decisões e locais de escrita, consulte
+[Fluxos do Local Agent](workflow-diagrams.md).
+
 ## Uso mais simples: shell interativo
 
 Entre no projeto pelo terminal Fish da IDE e execute apenas:
