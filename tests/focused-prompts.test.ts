@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertFocusedRepairChanged, focusedBlockingFindings, focusedRepairPrompt, focusedReviewPrompt } from "../src/workflow/fix.js";
+import { assertFocusedRepairChanged, focusedBlockingFindings, focusedRepairPrompt, focusedReviewPrompt, reusedFocusedCheckpoint } from "../src/workflow/fix.js";
 
 describe("focused workflow prompts", () => {
   it("limits review findings to explicit requirements and introduced defects", () => {
@@ -30,5 +30,10 @@ describe("focused workflow prompts", () => {
   it("reports a no-op repair blocker before checkpoint creation", () => {
     expect(() => assertFocusedRepairChanged([], ["Maximum steps reached"])).toThrow("focused repair produced no file changes: Maximum steps reached");
     expect(() => assertFocusedRepairChanged(["tasks/README.md"], [])).not.toThrow();
+  });
+
+  it("reuses an inherited checkpoint when implementation is already identical", () => {
+    expect(reusedFocusedCheckpoint({ commit: "abc", files: ["tasks/README.md"] }, { commit: "abc", treeHash: "tree" }, "2026-09-28T00:00:00.000Z")).toEqual({ stage: "focused-fix", iteration: 0, commit: "abc", treeHash: "tree", changedFiles: ["tasks/README.md"], createdAt: "2026-09-28T00:00:00.000Z" });
+    expect(() => reusedFocusedCheckpoint({ commit: "abc", files: [] }, { commit: "other", treeHash: "tree" })).toThrow("identity changed");
   });
 });

@@ -1806,6 +1806,8 @@ Fifteenth hands-on correction (2026-09-18): run `fix-20260918181332-7912e5fc` ex
 
 Sixteenth hands-on correction (2026-09-18): model admission incorrectly classified the GNOME `ptyxis` terminal process as a foreign CUDA workload. Exact known desktop/display clients (`ptyxis`, `gnome-shell`, `Xwayland`, and `Xorg`) are now excluded from the foreign-compute-process rule; their aggregate VRAM remains covered by the existing fail-closed VRAM ceiling. Python, ComfyUI, Blender, unknown workers, and every other non-llama compute process remain blocking.
 
+Seventeenth hands-on correction (2026-09-28): run `fix-20260928225140-edfa3174` inherited the previously published `tasks/README.md`; the implementer rewrote byte-identical content, leaving the isolated worktree clean, and checkpoint creation incorrectly failed with `checkpoint has no changes`. When an exact published checkpoint was adopted as the run base and implementation produces no additional diff, `/fix` now reuses that checkpoint, records `checkpoint.reused`, and continues gates/review instead of requiring a meaningless new commit. A no-op implementation without an inherited checkpoint remains an explicit failure.
+
 Milestone 12 begins only after Milestone 11 has a persisted verdict for every AC-062–AC-068 scenario. A runtime-blocked Milestone 11 criterion may remain blocked only when its report states the exact prerequisite or repeated failure evidence; it must not be silently treated as passed.
 
 Each milestone must leave the repository testable and committed. Codex must not implement all milestones as one unreviewable change.
