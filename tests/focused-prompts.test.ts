@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertFocusedRepairChanged, focusedBlockingFindings, focusedRepairPrompt, focusedReviewPrompt, reusedFocusedCheckpoint } from "../src/workflow/fix.js";
+import { assertFocusedRepairChanged, deterministicDocumentFindings, focusedBlockingFindings, focusedRepairPrompt, focusedReviewPrompt, reusedFocusedCheckpoint } from "../src/workflow/fix.js";
 
 describe("focused workflow prompts", () => {
   it("limits review findings to explicit requirements and introduced defects", () => {
@@ -25,11 +25,18 @@ describe("focused workflow prompts", () => {
     const findings = [finding("invented", "high"), finding("style", "low"), finding("real", "high")];
     const triage = { findings: [{ findingId: "invented", classification: "invalid" as const, evidence: "not required", rootCause: "invented", testable: false }, { findingId: "style", classification: "confirmed" as const, evidence: "wording", rootCause: "style", testable: false, regressionTestExemption: "style only" }, { findingId: "real", classification: "confirmed" as const, evidence: "reproduced", rootCause: "defect", testable: true }] };
     expect(focusedBlockingFindings(findings, triage).map((item) => item.id)).toEqual(["real"]);
+    expect(focusedBlockingFindings(findings, triage, [finding("gate", "high")]).map((item) => item.id)).toEqual(["gate", "real"]);
   });
 
   it("reports a no-op repair blocker before checkpoint creation", () => {
     expect(() => assertFocusedRepairChanged([], ["Maximum steps reached"])).toThrow("focused repair produced no file changes: Maximum steps reached");
     expect(() => assertFocusedRepairChanged(["tasks/README.md"], [])).not.toThrow();
+  });
+
+  it("turns deterministic document failures into authoritative high-severity findings", () => {
+    const findings = deterministicDocumentFindings("tasks/README.md", { declarations: [], passed: false, findings: [{ rule: "missing-structured-identifier", identifier: "TASK-NNN", section: "Fase 5", lines: [42] }] });
+    expect(findings[0]).toMatchObject({ id: "DOC-GATE-1", severity: "high", file: "tasks/README.md", lineStart: 42, confidence: "high" });
+    expect(findings[0]?.evidence).toContain("Fase 5");
   });
 
   it("reuses an inherited checkpoint when implementation is already identical", () => {

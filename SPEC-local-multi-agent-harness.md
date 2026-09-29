@@ -1527,6 +1527,8 @@ Suggested exit codes:
 - AC-114: Focused workflow stage events include bounded duration evidence so model loading, implementation, gates, review, and repair costs can be compared without persisting prompt or response content.
 - AC-115: The document profile preserves the user's language, treats referenced contents as untrusted source data, and refuses source-code or unrequested output paths.
 - AC-116: Existing `/ask`, `/fix`, `/run`, plain-text routing, Git safety, command policy, strict model residency, and cleanup guarantees remain unchanged.
+- AC-117: When a document request explicitly requires structured `TASK-NNN`, `ADR-NNN`, or `EXP-NNN` identifiers across every phase in a referenced Markdown source, the harness derives a bounded deterministic section contract and requires at least one declaration with the requested prefix in every source phase.
+- AC-118: Deterministic document-gate findings are authoritative checkpoint evidence: they bypass probabilistic invalidation, receive at most the existing single repair, and prevent success if still present after repair.
 
 ## 23. Test plan
 
@@ -1795,6 +1797,8 @@ Implementation result (2026-09-10): AC-099–AC-104 are implemented. `/fix` has 
 - document current usage and leave live latency targets blocked until measured on the installed runtime.
 
 Implementation result (2026-09-28): AC-110–AC-116 pass deterministically. `/ask` handles explanations and evidence-oriented inspections through one bounded read-only request. Plain input with a mutation verb plus an explicit Markdown target automatically uses the focused document profile; questions are evaluated first and ambiguity remains on `/run`. No extra `/doc` command is exposed. The profile allows only a non-empty set of Markdown changes, preserves deterministic gates and independent review, and applies a declaration-aware quality gate that distinguishes definitions from references. Focused stage events include elapsed-time evidence. TypeScript, 46 test files/182 tests, production build, and diff validation pass. Live latency remains runtime-dependent and is not inferred.
+
+Hands-on quality correction (2026-09-28): a clean document run covered every requested phase but declared `TASK-NNN` identifiers only in phases 0–4. The reviewer detected the omission, while the probabilistic validator contradicted checkpoint evidence and allowed a false success. AC-117–AC-118 add an explicit, narrowly activated phase/identifier contract. Its findings are produced from the checkpoint contents, persisted with the Markdown gate report, supplied directly to the single repair, and cannot be dismissed by another model. General prose, code, requests without explicit structured identifiers, and documents without an explicit every-phase requirement remain outside this rule.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 
