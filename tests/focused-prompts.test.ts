@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { assertFocusedRepairChanged, deterministicDocumentFindings, focusedBlockingFindings, focusedRepairPrompt, focusedReviewPrompt, reusedFocusedCheckpoint } from "../src/workflow/fix.js";
+import { assertFocusedRepairChanged, deterministicDocumentFindings, focusedBlockingFindings, focusedDocumentPrompt, focusedPerformanceReport, focusedRepairPrompt, focusedReviewPrompt, reusedFocusedCheckpoint } from "../src/workflow/fix.js";
 
 describe("focused workflow prompts", () => {
+  it("prevents redundant source reads and whole-document rewrites in document mode", () => {
+    const prompt = focusedDocumentPrompt("update @plan.md");
+    expect(prompt).toContain("do not read those source paths again");
+    expect(prompt).toContain("Read each existing output target at most once");
+    expect(prompt).toContain("prefer small edits");
+  });
+
+  it("summarizes content-free performance evidence", () => {
+    const report = focusedPerformanceReport(1200, [{ stage: "IMPLEMENTING", durationMs: 900 }], [{ role: "implementer", alias: "coder", durationMs: 800, inputTokens: 100, outputTokens: 20, reasoningTokens: 0, toolCalls: 2 }, { role: "repositoryReviewer", alias: "main", durationMs: 200, inputTokens: 30, outputTokens: 5, reasoningTokens: 0, toolCalls: 1 }], { inferenceRetries: 0, repairIterations: 0, contextHandoffs: 0 });
+    expect(report).toMatchObject({ totalDurationMs: 1200, totals: { inputTokens: 130, outputTokens: 25, reasoningTokens: 0, toolCalls: 3 } });
+    expect(JSON.stringify(report)).not.toContain("prompt");
+  });
   it("limits review findings to explicit requirements and introduced defects", () => {
     const prompt = focusedReviewPrompt("create an index", ["tasks/README.md"], [{ name: "git-status", status: "passed" }]);
     expect(prompt).toContain("explicit task");
