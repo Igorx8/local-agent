@@ -1531,6 +1531,25 @@ Suggested exit codes:
 - AC-118: Deterministic document-gate findings are authoritative checkpoint evidence: they bypass probabilistic invalidation, receive at most the existing single repair, and prevent success if still present after repair.
 - AC-119: If document implementation produces no diff, the harness validates only explicit safe Markdown output targets from the user instruction; a compliant existing target may complete idempotently, while deterministic defects proceed to the existing repair instead of failing before validation.
 
+### Consistency, quality, and local-agent stabilization
+
+- AC-125: Deterministic transformations may write user files only for an explicit user requirement, an exact recognized structure, a uniquely derivable result, and a reversible checkpoint; ambiguity must fall back to model execution or fail closed.
+- AC-126: A deterministic transformation must prove semantic preservation outside its declared ranges and must pass the same scope, checkpoint, gate, and independent final-review requirements as a model edit.
+- AC-127: Every focused run derives a bounded context manifest identifying user instructions, referenced sources, output targets, changed ranges, and evidence needed by each role; a role must not receive unrelated repository content by default.
+- AC-128: File reads, searches, and model tool calls have risk-proportional budgets derived from task class and declared targets. Exceeding a budget requires deterministic progress evidence or fails with an actionable reason.
+- AC-129: The implementer must prefer patch-sized edits. Whole-file replacement is allowed only for a new file, an explicit rewrite request, or when the resulting artifact proves that unchanged regions were preserved.
+- AC-130: Reviewers receive the explicit requirement contract, deterministic gate results, diff summary, and relevant changed ranges; they must not infer requirements from repository prose that the user did not select.
+- AC-131: Deliverable quality reports distinguish objective completeness, specificity, traceability, verification, and unsupported invention. A single aggregate score cannot turn a failed mandatory dimension into success.
+- AC-132: Generic phrases are not universally forbidden. When a prompt explicitly asks for measurable criteria, operational steps, evidence, or examples, the harness must deterministically require those fields to contain checkable details rather than tautological restatements.
+- AC-133: Routing, context selection, budgets, edits, gates, and verdicts are reproducible for identical fixtures and configuration; nondeterministic model content is measured separately from harness-policy variance.
+- AC-134: A benchmark corpus covers read-only inspection, documentation, one-line code edits, localized fixes with regression tests, coordinated multi-file changes, refactors, and full architectural workflows.
+- AC-135: Each benchmark records correctness, requirement coverage, unsupported changes, gate outcome, reviewer agreement, retries, repairs, tool calls, tokens, model switches, time to first visible progress, and total duration.
+- AC-136: A workflow profile may be promoted for normal use only after repeated clean runs meet its correctness and false-success thresholds. Latency improvements never compensate for a correctness regression.
+- AC-137: Code readiness proceeds through the benchmark ladder in order; failure at a lower-risk tier blocks promotion to higher-risk autonomous mutations but does not disable already-proven read-only or documentation workflows.
+- AC-138: Interactive output explains the selected route, active contract, current evidence-producing action, changed paths, remaining verification, and terminal verdict without exposing hidden reasoning or file contents.
+- AC-139: Every optimization has a before/after fixture, preserves Git/resource/security invariants, and can be disabled independently for diagnosis.
+- AC-140: Stabilization is complete only when the documented support matrix states which workflows are proven, experimental, blocked, or unsupported on the installed hardware and model artifacts.
+
 ## 23. Test plan
 
 ### Unit tests
@@ -1812,6 +1831,49 @@ No-diff correction (2026-09-29): run `doc-20260929004159-1705a8a5` reached its i
 - AC-124: Performance changes require before/after evidence from the same prompt and repository state; output quality gates cannot be weakened to meet latency targets.
 
 First implementation slice (2026-09-29): run `doc-20260929005443-32e5c9a9` established a 582-second baseline: approximately 525 seconds in implementation, 57 seconds in review, 46,499 observed input tokens, 10,153 output tokens, and 23 tool calls. The implementer redundantly reread source material already attached to its prompt and emitted a 7,449-token atomic edit for 113 mechanical line changes. The focused document prompt now forbids rereading attached sources, limits existing-target inspection to one read, and requests bounded edits. Successful runs persist content-free performance metrics for direct before/after comparison. Deterministic-finding repair already avoids the pre-repair reviewer/model switch. Mechanical transformations remain a later slice and must be narrowly proven before they may write user files.
+
+### Milestone 19: deterministic transformations and semantic quality
+
+- implement an allowlisted transformation contract for mechanically provable edits, beginning with missing structured identifiers inside explicit task-list sections;
+- require exact target paths, exact structural anchors, collision-free output, preserved bytes outside declared ranges, a detached checkpoint, and rollback evidence;
+- fall back to the model when numbering, scope, target structure, or desired text is ambiguous;
+- introduce multidimensional document-quality reports for completeness, specificity, traceability, verification, and unsupported invention;
+- activate anti-generic checks only when the user's request explicitly asks for measurable or operational content;
+- satisfy AC-125, AC-126, AC-129, AC-131, and AC-132 without weakening independent final review.
+
+Exit gate: fixtures prove both safe mechanical application and refusal of ambiguous structures; the same documentation benchmark retains or improves every mandatory quality dimension while materially reducing generated output tokens.
+
+### Milestone 20: context, tools, and adaptive budgets
+
+- build a per-role context manifest and send only instructions, references, targets, diffs, ranges, and gate evidence needed by that role;
+- prevent repeated reads of attached sources and cache content-addressed read/search results within a run;
+- derive tool-call, input-token, output-token, and changed-range budgets from route, target count, source size, and risk;
+- allow budget extension only from deterministic progress such as a new changed range, completed gate, or newly resolved blocker;
+- expose route, contract, budget, progress, and remaining verification in the interactive stream;
+- satisfy AC-127, AC-128, AC-130, and AC-138.
+
+Exit gate: repeated fixed-fixture runs show lower median context/tool usage with no loss of correctness, scope adherence, or reviewer agreement.
+
+### Milestone 21: reproducible evaluation and code-readiness ladder
+
+- create immutable fixtures and expected invariants for inspection, documentation, one-line code edits, localized fixes, multi-file changes, refactors, and full workflows;
+- add machine-readable quality/performance verdicts and compare repeated runs by model/configuration fingerprint;
+- separate harness-policy determinism from model-output variance and track false-success, false-block, retry, and repair rates;
+- promote code workflows sequentially: read-only inspection, single-file edit, tested fix, coordinated change, refactor, then architectural run;
+- require regression tests and language-profile gates for code tiers while retaining language-agnostic fallback behavior;
+- satisfy AC-133–AC-137 and AC-139.
+
+Exit gate: every promoted tier passes its repeated-run threshold with zero false success in the acceptance sample; higher-risk tiers remain experimental until independently proven.
+
+### Milestone 22: operational stabilization and support matrix
+
+- consolidate diagnostics, failure recovery, run comparison, cleanup, session continuity, and IDE feedback into the zero-configuration `local-agent` experience;
+- publish a support matrix tied to the installed GPU, runtime versions, model hashes, workflow profiles, and measured limits;
+- document proven, experimental, blocked, and unsupported behavior without presenting skipped capabilities as passed;
+- run the complete safety, recovery, quality, performance, and code-readiness acceptance sequence;
+- satisfy AC-140 and produce the final stabilization report.
+
+Exit gate: a user can start `local-agent` in a supported repository, understand what it is doing, receive a trustworthy verdict, recover from failure, and reproduce the recorded result without memorizing harness internals.
 
 Post-hands-on correction (2026-09-14): the first live `/fix` reached `IMPLEMENTING` but a transient OpenCode request ended as the opaque error `fetch failed`. Focused inference now uses the same bounded `workflow.inferenceRetries` policy as the complete workflow, persists `inference.retry` evidence, verifies OpenCode health before each retry, and identifies whether failure occurred during model activation, session creation, prompt submission, or response retrieval. An unavailable OpenCode service stops retries immediately; model cleanup and failed-state guarantees remain unchanged.
 
