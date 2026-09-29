@@ -1843,6 +1843,8 @@ First implementation slice (2026-09-29): run `doc-20260929005443-32e5c9a9` estab
 
 Exit gate: fixtures prove both safe mechanical application and refusal of ambiguous structures; the same documentation benchmark retains or improves every mandatory quality dimension while materially reducing generated output tokens.
 
+First implementation slice (2026-09-29): the pure TASK identifier transformer accepts only an explicit every-phase contract, unique phase headings, collision-free existing declarations, and exactly one named task-list marker in each affected phase. It preserves existing identifiers, line endings, and every non-target line; allocates only unused sequential identifiers; verifies the complete contract after transformation; and returns unchanged content for missing sections, duplicate IDs, ambiguous headings, mixed prose, unsupported prefixes, or ineligible lists. Workflow writes, checkpoints, and the before/after live benchmark remain the next bounded slice.
+
 ### Milestone 20: context, tools, and adaptive budgets
 
 - build a per-role context manifest and send only instructions, references, targets, diffs, ranges, and gate evidence needed by that role;
