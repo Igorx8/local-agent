@@ -59,6 +59,7 @@ export function deterministicDocumentFindings(file: string, report: MarkdownQual
       ? `${finding.identifier} is declared at lines ${finding.lines.join(", ")}`
       : finding.rule === "missing-required-section" ? `Required source section ${finding.section} is absent from the output`
         : finding.rule === "missing-required-field" ? `${finding.section} has no explicit ${finding.field} field after its heading at line ${finding.lines[0]}`
+          : finding.rule === "uncheckable-required-field" ? `${finding.section} has no checkable evidence in its ${finding.field} field at line ${finding.lines[0]}`
           : `${finding.section} has no ${finding.identifier} declaration after its heading at line ${finding.lines[0]}`;
     return { id: `DOC-GATE-${index + 1}`, severity: "high", file, lineStart: finding.lines[0], lineEnd: finding.lines.at(-1), problem: finding.rule, evidence, reproduction: `Run the deterministic Markdown contract gate for ${file}`, expectedBehavior: "The explicit document contract is completely satisfied", actualBehavior: evidence, suggestedFix: "Make the smallest Markdown edit that satisfies this gate finding", confidence: "high" };
   });

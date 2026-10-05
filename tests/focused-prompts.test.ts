@@ -58,6 +58,12 @@ describe("focused workflow prompts", () => {
     expect(findings[0]?.evidence).toContain("Fase 2");
   });
 
+  it("turns an explicitly uncheckable criterion into authoritative evidence", () => {
+    const findings = deterministicDocumentFindings("tasks/README.md", { declarations: [], passed: false, findings: [{ rule: "uncheckable-required-field", field: "completion", section: "Fase 3", lines: [27] }] });
+    expect(findings[0]).toMatchObject({ severity: "high", problem: "uncheckable-required-field", lineStart: 27 });
+    expect(findings[0]?.evidence).toContain("checkable evidence");
+  });
+
   it("reuses an inherited checkpoint when implementation is already identical", () => {
     expect(reusedFocusedCheckpoint({ commit: "abc", files: ["tasks/README.md"] }, { commit: "abc", treeHash: "tree" }, "2026-09-28T00:00:00.000Z")).toEqual({ stage: "focused-fix", iteration: 0, commit: "abc", treeHash: "tree", changedFiles: ["tasks/README.md"], createdAt: "2026-09-28T00:00:00.000Z" });
     expect(() => reusedFocusedCheckpoint({ commit: "abc", files: [] }, { commit: "other", treeHash: "tree" })).toThrow("identity changed");
