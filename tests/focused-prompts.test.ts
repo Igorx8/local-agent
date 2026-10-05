@@ -51,6 +51,13 @@ describe("focused workflow prompts", () => {
     expect(findings[0]?.evidence).toContain("Fase 5");
   });
 
+  it("preserves the exact missing semantic field in authoritative evidence", () => {
+    const findings = deterministicDocumentFindings("tasks/README.md", { declarations: [], passed: false, findings: [{ rule: "missing-required-field", field: "completion", section: "Fase 2", lines: [18] }] });
+    expect(findings[0]).toMatchObject({ severity: "high", problem: "missing-required-field", lineStart: 18 });
+    expect(findings[0]?.evidence).toContain("completion");
+    expect(findings[0]?.evidence).toContain("Fase 2");
+  });
+
   it("reuses an inherited checkpoint when implementation is already identical", () => {
     expect(reusedFocusedCheckpoint({ commit: "abc", files: ["tasks/README.md"] }, { commit: "abc", treeHash: "tree" }, "2026-09-28T00:00:00.000Z")).toEqual({ stage: "focused-fix", iteration: 0, commit: "abc", treeHash: "tree", changedFiles: ["tasks/README.md"], createdAt: "2026-09-28T00:00:00.000Z" });
     expect(() => reusedFocusedCheckpoint({ commit: "abc", files: [] }, { commit: "other", treeHash: "tree" })).toThrow("identity changed");
