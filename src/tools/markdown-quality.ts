@@ -26,7 +26,7 @@ export interface MarkdownContract {
   checkableFields?: MarkdownRequiredField[];
 }
 
-export type MarkdownRequiredField = "objective" | "tasks" | "experiment" | "completion";
+export type MarkdownRequiredField = "objective" | "tasks" | "experiment" | "completion" | "operational-steps" | "evidence" | "examples";
 
 export interface DocumentQualityDimension {
   dimension: "completeness" | "specificity" | "traceability" | "verification" | "unsupported-invention";
@@ -61,6 +61,9 @@ const fieldPatterns: Record<MarkdownRequiredField, RegExp> = {
   tasks: /^\s*\*\*(?:Tarefas principais|Main tasks):\*\*\s*(.*)$/i,
   experiment: /^\s*\*\*(?:Experimento mais importante|Experimento principal|Most important experiment|Key experiment):\*\*\s*(.*)$/i,
   completion: /^\s*\*\*(?:Crit[eé]rio de conclus[aã]o|Completion criterion):\*\*\s*(.*)$/i,
+  "operational-steps": /^\s*\*\*(?:Passos operacionais|Operational steps):\*\*\s*(.*)$/i,
+  evidence: /^\s*\*\*(?:Evid[eê]ncias?|Evidence):\*\*\s*(.*)$/i,
+  examples: /^\s*\*\*(?:Exemplos?|Examples?):\*\*\s*(.*)$/i,
 };
 
 export function deriveMarkdownContract(task: string): MarkdownContract {
@@ -73,9 +76,15 @@ export function deriveMarkdownContract(task: string): MarkdownContract {
     [/\b(?:tarefas?\s+principais|main\s+tasks?)\b/i, "tasks"],
     [/\b(?:experimento(?:\s+mais\s+importante|\s+principal)?|(?:most\s+important|key)\s+experiment)\b/i, "experiment"],
     [/\b(?:crit[eé]rios?\s+de\s+conclus[aã]o|completion\s+criteria|completion\s+criterion)\b/i, "completion"],
+    [/\b(?:passos?\s+operacionais?|operational\s+steps?)\b/i, "operational-steps"],
+    [/\b(?:evid[eê]ncias?|evidence)\b/i, "evidence"],
+    [/\b(?:exemplos?|examples?)\b/i, "examples"],
   ].flatMap(([pattern, field]) => (pattern as RegExp).test(instruction) ? [field as MarkdownRequiredField] : []) : [];
   const checkableCompletion = /(?:crit[eé]rios?\s+(?:mensur(?:áveis|aveis|ável|avel)|verific(?:áveis|aveis|ável|avel)|operacionais?)\s+de\s+conclus[aã]o|crit[eé]rios?\s+de\s+conclus[aã]o[^.\n]{0,60}(?:mensur(?:áveis|aveis|ável|avel)|verific(?:áveis|aveis|ável|avel)|operacionais?)|(?:measurable|verifiable|operational)\s+completion\s+criteri(?:on|a)|completion\s+criteri(?:on|a)[^.\n]{0,60}(?:measurable|verifiable|operational))/i.test(instruction);
-  const checkableFields: MarkdownRequiredField[] = checkableCompletion && requiredFields.includes("completion") ? ["completion"] : [];
+  const checkableFields: MarkdownRequiredField[] = [
+    ...(checkableCompletion && requiredFields.includes("completion") ? ["completion" as const] : []),
+    ...(["operational-steps", "evidence", "examples"] as const).filter((field) => requiredFields.includes(field)),
+  ];
   if ((!identifierPrefix || !requiresCompletePhaseCoverage) && !requiredFields.length) return { identifierPrefix, requiredSections: [] };
   const sections = new Map<string, string>();
   for (const line of task.split(/\r?\n/)) {
@@ -159,7 +168,7 @@ export function validateMarkdownQuality(content: string, contract: MarkdownContr
       for (const field of contract.requiredFields ?? []) {
         const value = extractFieldValue(sectionLines, field);
         if (!value) findings.push({ rule: "missing-required-field", field, section: required.label, lines: [start] });
-        else if (contract.checkableFields?.includes(field) && !hasCheckableEvidence(value.content)) findings.push({ rule: "uncheckable-required-field", field, section: required.label, lines: [start + value.offset] });
+        else if (contract.checkableFields?.includes(field) && !hasCheckableFieldEvidence(field, value.content)) findings.push({ rule: "uncheckable-required-field", field, section: required.label, lines: [start + value.offset] });
       }
     }
   }
@@ -205,7 +214,16 @@ function extractFieldValue(lines: string[], field: MarkdownRequiredField): { con
 function hasCheckableEvidence(value: string): boolean {
   const normalized = value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[.!]+$/g, "").trim();
   if (!normalized || /^(?:pronto|feito|concluido|finalizado|funcionando|done|complete|completed|working|works|it works|task completed|fase concluida)$/.test(normalized)) return false;
-  return /\d(?:[\d.,]*)(?:\s*(?:%|ms|s|min|minutes?|segundos?|horas?|hours?))?\b|`[^`]+`|\b(?:testes?|tests?)\b[^\n]{0,50}\b(?:passam?|passing|passed|aprovados?)\b|\b(?:exit\s+code|c[oó]digo\s+de\s+sa[ií]da|http\s+status|status\s+http)\b|(?:^|\s)(?:[\w.-]+\/)+[\w.-]+|(?:>=|<=|===?|!==?|>|<)/i.test(value);
+  return /\d(?:[\d.,]*)(?:\s*(?:%|ms|s|min|minutes?|segundos?|horas?|hours?))?\b|`[^`]+`|\[[^\]]+\]\([^)]+\)|https?:\/\/\S+|\b(?:testes?|tests?)\b[^\n]{0,50}\b(?:passam?|passing|passed|aprovados?)\b|\b(?:exit\s+code|c[oó]digo\s+de\s+sa[ií]da|http\s+status|status\s+http)\b|(?:^|\s)(?:[\w.-]+\/)+[\w.-]+|(?:>=|<=|===?|!==?|>|<)/i.test(value);
+}
+
+function hasCheckableFieldEvidence(field: MarkdownRequiredField, value: string): boolean {
+  if (field === "operational-steps") {
+    const items = value.split(/\r?\n/).filter((line) => /^\s*(?:[-*+]\s+|\d+[.)]\s+)\S/.test(line));
+    return items.length > 0 && items.some((line) => !/^\s*(?:[-*+]\s+|\d+[.)]\s+)(?:fazer|executar|concluir|done|complete|do it)[.!]?\s*$/i.test(line));
+  }
+  if (field === "examples") return /```[\s\S]*?```|`[^`]+`|^\s*(?:[-*+]\s+)?(?:Entrada|Input|Sa[ií]da|Output|Given|When|Then):\s*\S/im.test(value);
+  return hasCheckableEvidence(value);
 }
 
 export function assertMarkdownQuality(pathname: string, report: MarkdownQualityReport): void {
