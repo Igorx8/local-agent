@@ -30,6 +30,7 @@ import { resolveFileReferences } from "./input/file-references.js";
 import { readShellHistory, writeShellHistory } from "./interactive/history.js";
 import { redact } from "./telemetry/redact.js";
 import { ensureHarnessIgnored, ensureRepositoryBaseline, inspectRepository, UnbornRepositoryDirtyError } from "./git/workspace.js";
+import { compareDocumentBenchmarks, parseDocumentBenchmarkSnapshot } from "./evaluation/document-benchmark.js";
 
 async function resolveRunId(repository: string, requested?: string): Promise<string> {
   if (requested) return requested; const directory = path.join(path.resolve(repository), ".agent-harness", "runs"); const runs = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -158,6 +159,14 @@ program.command("report").description("Generate a reproducible report for a run"
 
 program.command("handoff").description("Request a safe handoff at the next model-action boundary").argument("<run-id>").option("--repo <path>", "target repository", ".").action(async (runId, options) => {
   const request = await requestManualHandoff(await workspace(options.repo), runId); process.stdout.write(`Handoff requested: ${request}\n`);
+});
+
+const benchmark = program.command("benchmark").description("Evaluate controlled benchmark evidence");
+benchmark.command("document-compare").description("Compare two same-fixture document benchmark snapshots").argument("<before>").argument("<after>").option("--minimum-reduction <ratio>", "minimum output-token reduction from 0 to 1", "0.2").action(async (before, after, options) => {
+  const minimum = Number(options.minimumReduction); if (!Number.isFinite(minimum) || minimum < 0 || minimum > 1) throw new Error("minimum reduction must be between 0 and 1");
+  const baseline = parseDocumentBenchmarkSnapshot(JSON.parse(await readFile(path.resolve(before), "utf8")));
+  const candidate = parseDocumentBenchmarkSnapshot(JSON.parse(await readFile(path.resolve(after), "utf8")));
+  const verdict = compareDocumentBenchmarks(baseline, candidate, minimum); process.stdout.write(`${JSON.stringify(verdict, null, 2)}\n`); process.exitCode = verdict.status === "passed" ? 0 : verdict.status === "blocked" ? 4 : 5;
 });
 
 const model = program.command("model").description("Inspect and control registered local models");

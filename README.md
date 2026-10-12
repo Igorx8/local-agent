@@ -141,5 +141,6 @@ cria commits na branch atual nem faz merge automático.
 - [Fluxos e diagramas](docs/workflow-diagrams.md)
 - [Uso em outros repositórios](docs/using-in-other-repositories.md)
 - [Roadmap de estabilização](docs/stabilization-roadmap.md)
+- [Benchmark documental controlado](docs/document-benchmark.md)
 - [Compatibilidade do ambiente](docs/compatibility-report.md)
 - [Especificação completa](SPEC-local-multi-agent-harness.md)
