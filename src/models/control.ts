@@ -36,10 +36,11 @@ export async function startLocalModel(root: string, registry: ModelRegistry, ali
   try { await pollUntil(async () => (await runtimeAliases(registry).catch((): string[] => [])).includes(alias), 600_000, 500); } catch (error) { await stopLocalModel(root, lifecycle); throw error; }
   return state;
 }
-export async function smokeModel(registry: ModelRegistry, alias: string): Promise<{ completion: boolean; toolCall: boolean }> {
+export async function smokeModel(registry: ModelRegistry, alias: string): Promise<{ completion: boolean; toolCall: boolean; tokenUsage: boolean }> {
   requireAlias(registry, alias); const endpoint = new URL("chat/completions", registry.baseUrl); const common = { model: alias, temperature: 0, max_tokens: 256 };
-  const request = async (body: object) => { const response = await fetch(endpoint, { method: "POST", headers: headers(registry), body: JSON.stringify(body), signal: AbortSignal.timeout(120_000) }); if (!response.ok) throw new Error(`smoke call returned ${response.status}: ${(await response.text()).slice(0, 500)}`); return response.json() as Promise<{ choices?: Array<{ message?: { content?: string; tool_calls?: unknown[] } }> }>; };
+  const request = async (body: object) => { const response = await fetch(endpoint, { method: "POST", headers: headers(registry), body: JSON.stringify(body), signal: AbortSignal.timeout(120_000) }); if (!response.ok) throw new Error(`smoke call returned ${response.status}: ${(await response.text()).slice(0, 500)}`); return response.json() as Promise<{ choices?: Array<{ message?: { content?: string; tool_calls?: unknown[] } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }>; };
   const completion = await request({ ...common, messages: [{ role: "user", content: "Reply with exactly: ok" }] });
   const tools = await request({ ...common, messages: [{ role: "user", content: "Call the probe tool once." }], tools: [{ type: "function", function: { name: "probe", description: "Capability probe", parameters: { type: "object", properties: {}, additionalProperties: false } } }], tool_choice: "required" });
-  return { completion: Boolean(completion.choices?.[0]?.message?.content), toolCall: Boolean(tools.choices?.[0]?.message?.tool_calls?.length) };
+  const usage = [completion.usage, tools.usage]; const tokenUsage = usage.every((item) => Number.isInteger(item?.prompt_tokens) && Number.isInteger(item?.completion_tokens) && item!.total_tokens === item!.prompt_tokens! + item!.completion_tokens!);
+  return { completion: Boolean(completion.choices?.[0]?.message?.content), toolCall: Boolean(tools.choices?.[0]?.message?.tool_calls?.length), tokenUsage };
 }

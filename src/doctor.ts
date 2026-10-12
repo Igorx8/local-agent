@@ -6,6 +6,9 @@ import type { HarnessConfig } from "./config.js";
 import { validateCommand } from "./tools/policy.js";
 import { loadModelRegistry, resolveCachedArtifact } from "./models/registry.js";
 import { requiredServerFlags, unsupportedFlags } from "./models/profiles.js";
+import { createModelManager } from "./models/manager.js";
+import { runtimeAliases, smokeModel } from "./models/control.js";
+import type { ModelRegistry } from "./models/registry.js";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "blocked";
 export interface DoctorCheck { name: string; status: CheckStatus; detail: string; }
@@ -39,18 +42,20 @@ async function fingerprint(alias: string, file: string): Promise<DoctorCheck> {
   } catch (error) { return { name: `model:${alias}`, status: "fail", detail: `${file}: ${error instanceof Error ? error.message : String(error)}` }; }
 }
 
-export async function runDoctor(config: HarnessConfig): Promise<DoctorReport> {
+export async function runDoctor(config: HarnessConfig, options: { live?: boolean } = {}): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
+  let registry: ModelRegistry | undefined;
   for (const [name, executable, args] of [["node", process.execPath, ["--version"]], ["git", "git", ["--version"]], ["opencode", "opencode", ["--version"]], ["llama.cpp", "llama-server", ["--version"]], ["nvidia", "nvidia-smi", ["--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"]]] as const) {
     const result = await command(executable, [...args]);
     const absentRuntime = name === "opencode" || name === "llama.cpp" || name === "nvidia";
     checks.push({ name, status: result.code === 0 ? "pass" : absentRuntime ? "blocked" : "fail", detail: result.output || `exit ${result.code}` });
   }
   checks.push(await endpoint("OpenCode health/API", config.runtime.opencodeUrl));
-  checks.push(await endpoint("llama.cpp health", new URL("/health", config.runtime.llamaUrl).toString()));
+  const llamaHealth = await endpoint("llama.cpp health", new URL("/health", config.runtime.llamaUrl).toString());
+  checks.push(options.live && llamaHealth.status === "blocked" ? { ...llamaHealth, status: "warn", detail: `${llamaHealth.detail}; no model was preloaded, live validation will start one` } : llamaHealth);
   checks.push(...await Promise.all(Object.entries(config.modelFiles).map(([alias, file]) => fingerprint(alias, file))));
   try {
-    const registry = await loadModelRegistry(config.modelRegistry);
+    registry = await loadModelRegistry(config.modelRegistry);
     checks.push({ name: "model registry", status: "pass", detail: `${Object.keys(registry.models).length} exact aliases; provider ${registry.providerId}; credential ${registry.apiKeyEnv}` });
     const cacheRoot = process.env.HF_HOME ? `${process.env.HF_HOME}/hub` : `${process.env.HOME}/.cache/huggingface/hub`;
     for (const [alias, model] of Object.entries(registry.models)) {
@@ -74,7 +79,33 @@ export async function runDoctor(config: HarnessConfig): Promise<DoctorReport> {
     checks.push({ name: "repository command policy", status: "fail", detail: error instanceof Error ? error.message : String(error) });
   }
   for (const kind of ["adversarial", "property", "mutation", "flaky", "regression"] as const) checks.push({ name: `${kind} verification adapter`, status: config.verification.commands[kind] ? "pass" : "warn", detail: config.verification.commands[kind] ? "configured as executable + argv" : kind === "regression" ? "not configured; testable confirmed findings will fail closed" : "not configured; capability will be reported as skipped, never assumed" });
-  checks.push({ name: "token usage visibility", status: "blocked", detail: "requires a compatible running OpenCode/llama.cpp request; no undocumented field assumed" });
-  checks.push({ name: "router unload behavior", status: "blocked", detail: "requires configured models and a running llama.cpp router; no model was started by doctor" });
+  if (!options.live) {
+    checks.push({ name: "token usage visibility", status: "blocked", detail: "requires --live; normal doctor never starts a model" });
+    checks.push({ name: "model unload/switch behavior", status: "blocked", detail: "requires --live; normal doctor never starts or stops a model" });
+  } else if (!registry) {
+    checks.push({ name: "token usage visibility", status: "fail", detail: "model registry is unavailable" });
+    checks.push({ name: "model unload/switch behavior", status: "fail", detail: "model registry is unavailable" });
+  } else {
+    const aliases = Object.keys(registry.models); const observed: string[] = []; let tokenUsage = true; const manager = createModelManager(config, { registry, router: {}, process: {} });
+    try {
+      const active = await runtimeAliases(registry).catch((): string[] => []);
+      if (active.length) throw new Error(`refusing live validation while endpoint already advertises: ${active.join(", ")}`);
+      for (const alias of aliases) {
+        await manager.ensureModel(alias); const advertised = await runtimeAliases(registry);
+        if (advertised.length !== 1 || advertised[0] !== alias) throw new Error(`expected only ${alias}, observed ${advertised.join(", ") || "none"}`);
+        const smoke = await smokeModel(registry, alias); if (!smoke.completion || !smoke.toolCall) throw new Error(`${alias} failed completion/tool-call smoke`);
+        tokenUsage &&= smoke.tokenUsage; observed.push(alias);
+      }
+      await manager.stop();
+      const remaining = await runtimeAliases(registry).catch((): string[] => []);
+      if (remaining.length) throw new Error(`model endpoint still advertises after stop: ${remaining.join(", ")}`);
+      checks.push({ name: "token usage visibility", status: tokenUsage ? "pass" : "fail", detail: tokenUsage ? `prompt, completion, and total token counts verified for ${observed.join(", ")}` : "one or more smoke responses omitted exact compatible token counts" });
+      checks.push({ name: "model unload/switch behavior", status: "pass", detail: `validated strict sequence ${observed.join(" -> ")} -> stopped with release probes` });
+    } catch (error) {
+      await manager.stop().catch(() => undefined); const detail = error instanceof Error ? error.message : String(error);
+      checks.push({ name: "token usage visibility", status: "blocked", detail });
+      checks.push({ name: "model unload/switch behavior", status: "blocked", detail });
+    }
+  }
   return { ok: checks.every((check) => check.status === "pass" || check.status === "warn"), generatedAt: new Date().toISOString(), checks };
 }

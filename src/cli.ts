@@ -89,8 +89,8 @@ async function interactiveShell(repository: string, config: Awaited<ReturnType<t
 
 program.command("regression-proof").description("Run a configured test against repaired and defective checkpoints").argument("<command>").argument("[args...]").action(async (command, args) => { process.stdout.write(`${JSON.stringify(await runGitRegressionAdapter(process.cwd(), command, args))}\n`); });
 
-program.command("doctor").description("Validate local runtime compatibility").option("-c, --config <file>", "configuration file").option("--json", "emit JSON").action(async (options) => {
-  const repository = await workspace(); const report = await runDoctor(await loadConfig(await configuration(repository, options.config)));
+program.command("doctor").description("Validate local runtime compatibility").option("-c, --config <file>", "configuration file").option("--json", "emit JSON").option("--live", "sequentially load, smoke, switch, and unload every configured model").action(async (options) => {
+  const repository = await workspace(); const report = await runDoctor(await loadConfig(await configuration(repository, options.config)), { live: options.live });
   if (options.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   else for (const check of report.checks) process.stdout.write(`${check.status.toUpperCase().padEnd(7)} ${check.name}: ${check.detail}\n`);
   process.exitCode = report.ok ? 0 : report.checks.some((check) => ["opencode", "llama.cpp", "OpenCode health/API", "llama.cpp health"].includes(check.name) && check.status !== "pass") ? 4 : 3;

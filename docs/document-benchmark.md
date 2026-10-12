@@ -26,9 +26,12 @@ limite pode ser alterado explicitamente, sem alterar os gates de qualidade:
 harness benchmark document-compare before.json after.json --minimum-reduction 0.3
 ```
 
-Em 12/10/2026, a execução ao vivo permaneceu bloqueada nesta sessão: o
-`harness doctor` não conseguiu acessar o driver NVIDIA e os endpoints locais do
-OpenCode e llama.cpp estavam indisponíveis. Nenhum modelo foi iniciado e esse
-estado não foi tratado como evidência de benchmark. Quando o runtime estiver
-saudável, as duas medições ainda devem partir da mesma fixture e árvore inicial;
-o histórico textual de 582 segundos não substitui um snapshot completo.
+Em 12/10/2026, a primeira verificação isolada não enxergou o driver NVIDIA nem
+os endpoints locais e foi corretamente mantida como bloqueada. Depois que o
+usuário iniciou o `local-agent`, `harness doctor --live --json` validou os dois
+modelos em sequência, contagem exata de tokens, tool-call, troca e
+descarregamento, terminando com aproximadamente 301 MiB de VRAM em uso e sem
+servidor llama.cpp residual. Isso resolve o bloqueio de runtime, mas não
+substitui os dois snapshots do benchmark. As medições ainda devem partir da
+mesma fixture e árvore inicial; o histórico textual de 582 segundos não é um
+snapshot completo comparável.

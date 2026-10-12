@@ -69,6 +69,18 @@ Avisos sobre adaptadores opcionais são esperados. Itens `blocked` relacionados
 ao modelo ou à GPU devem ser resolvidos antes de iniciar uma tarefa que use
 inferência.
 
+Para validar também inferência, tokens e a troca segura entre todos os modelos,
+deixe o `local-agent` ocioso, sem tarefa em andamento, e execute em outro
+terminal:
+
+```fish
+harness doctor --live --json
+```
+
+Esse modo é opt-in porque carrega cada modelo sequencialmente, executa smoke de
+texto e tool-call, confirma a contagem de tokens e encerra o último modelo. Ele
+recusa a validação caso a API já anuncie um modelo ativo.
+
 ## Uso diário
 
 Abra o terminal da IDE no repositório em que deseja trabalhar e execute:
