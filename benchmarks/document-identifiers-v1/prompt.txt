@@ -1,0 +1,1 @@
+Leia @plan.md e atualize tasks/README.md. Cubra todas as fases e use identificadores TASK-NNN únicos em todas as tarefas principais. Para cada fase, preserve o objetivo, os passos operacionais, a evidência, o exemplo e o critério de conclusão mensurável. Não altere nenhum outro conteúdo.

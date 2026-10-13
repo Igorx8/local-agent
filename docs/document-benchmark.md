@@ -35,3 +35,32 @@ servidor llama.cpp residual. Isso resolve o bloqueio de runtime, mas não
 substitui os dois snapshots do benchmark. As medições ainda devem partir da
 mesma fixture e árvore inicial; o histórico textual de 582 segundos não é um
 snapshot completo comparável.
+
+## Resultado controlado de 12/10/2026
+
+A fixture `benchmarks/document-identifiers-v1` contém oito fases e 64 tarefas.
+Objetivos, passos, evidências, exemplos e critérios mensuráveis já estão
+corretos; somente os identificadores estruturados estão ausentes. A baseline é
+a revisão `19e2b80`, anterior ao transformador, e a candidata é a revisão atual.
+
+| Métrica | Baseline | Candidata | Delta |
+| --- | ---: | ---: | ---: |
+| Status do workflow | falhou após 1 reparo | sucesso | melhora |
+| Duração | 294.425 ms | 244.770 ms | −49.655 ms |
+| Tokens de entrada | 68.607 | 21.709 | −46.898 |
+| Tokens de saída | 11.269 | 4.870 | −6.399 (−56,8%) |
+| Tool calls | 18 | 6 | −12 |
+| Reparos | 1 | 0 | −1 |
+
+A baseline inseriu identificadores sem o delimitador contratual e alterou
+títulos, falhando em rastreabilidade e preservação. A candidata passou
+completude, especificidade, rastreabilidade, verificação e ausência de invenção,
+preservando todos os bytes fora dos IDs. Fixture, prompt, árvore Git inicial,
+runtime e modelos tiveram fingerprints idênticos; o veredito persistido em
+`benchmarks/results/verdict.json` é `passed`.
+
+O benchmark também mostrou uma oportunidade posterior: mesmo depois de a
+transformação determinística satisfazer o contrato, o implementador ainda foi
+invocado e tentou reeditar o arquivo. Eliminar essa inferência redundante exige
+um critério geral de completude e pertence ao contexto/budget do Milestone 20;
+não foi usado para alterar o gate deste benchmark.

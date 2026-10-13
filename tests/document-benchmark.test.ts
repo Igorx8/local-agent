@@ -10,7 +10,7 @@ const quality = (specificity: "pass" | "fail" = "pass") => [
 ];
 
 const snapshot = (outputTokens: number, overrides: Partial<DocumentBenchmarkSnapshot> = {}): DocumentBenchmarkSnapshot => ({
-  fixtureSha256: "fixture", promptSha256: "prompt", initialTreeHash: "tree", runtimeFingerprint: "runtime", modelFingerprint: "models", quality: quality(),
+  workflowStatus: "succeeded", fixtureSha256: "fixture", promptSha256: "prompt", initialTreeHash: "tree", runtimeFingerprint: "runtime", modelFingerprint: "models", quality: quality(),
   metrics: { totalDurationMs: 1000, inputTokens: 100, outputTokens, toolCalls: 4, modelSwitches: 1, retries: 0, repairs: 0 }, ...overrides,
 });
 
@@ -30,6 +30,11 @@ describe("controlled document benchmark", () => {
     expect(verdict.status).toBe("failed");
     expect(verdict.reasons).toContain("specificity is fail, not pass");
     expect(verdict.reasons.some((reason) => reason.includes("below 20.00%"))).toBe(true);
+  });
+
+  it("allows a failed baseline but never a failed candidate", () => {
+    expect(compareDocumentBenchmarks(snapshot(1000, { workflowStatus: "failed" }), snapshot(700)).status).toBe("passed");
+    expect(compareDocumentBenchmarks(snapshot(1000), snapshot(700, { workflowStatus: "failed" })).reasons).toContain("candidate workflow is failed, not succeeded");
   });
 
   it("creates stable content fingerprints", () => {

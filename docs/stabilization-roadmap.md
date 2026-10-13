@@ -16,6 +16,13 @@ chamadas de ferramenta para alterar um único Markdown.
 Isso comprova viabilidade, mas ainda não consistência geral. O uso com código
 continua experimental até passar pela escada de validação descrita abaixo.
 
+Em 12/10/2026, o benchmark documental controlado fechou as etapas 1 a 3 deste
+roadmap para a fixture avaliada. Contra a baseline `19e2b80`, a candidata passou
+as cinco dimensões de qualidade e reduziu tokens de saída em 56,8%, tokens de
+entrada em 46.898, tool calls em 12 e reparos de 1 para 0. Isso não promove
+automaticamente workflows de código; contexto/budgets e a escada de código
+continuam sendo as próximas etapas.
+
 ## Princípios inegociáveis
 
 - Uma otimização nunca pode remover um gate necessário ou converter incerteza

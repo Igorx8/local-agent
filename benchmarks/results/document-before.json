@@ -1,0 +1,55 @@
+{
+  "workflowStatus": "failed",
+  "fixtureSha256": "f7213865b934dd4bb5a3bedc58b3d09f0dfdf03c1aa3b11bf55bd18667c61f89",
+  "promptSha256": "1ba6a64e0a6368b1ec454da21285f6c5dbbacdaf8c1909ec373b10a9a8a4a6f0",
+  "initialTreeHash": "43a5332b3d15cff4df7efee020a4e6dc08955e38",
+  "runtimeFingerprint": "2e4a61daabcc1bf399a755b5decbd587fb0323275ba61b4a15317ddc27a1d7f1",
+  "modelFingerprint": "122e4b956638ce4c9298fd8d6b00659222d7c45ac29196bfa6f1309213931c5c",
+  "quality": [
+    {
+      "dimension": "completeness",
+      "status": "pass",
+      "evidence": []
+    },
+    {
+      "dimension": "specificity",
+      "status": "pass",
+      "evidence": []
+    },
+    {
+      "dimension": "traceability",
+      "status": "fail",
+      "evidence": [
+        "Fase 0 — Preparação has no TASK-NNN declaration",
+        "Fase 1 — Domínio has no TASK-NNN declaration",
+        "Fase 2 — API has no TASK-NNN declaration",
+        "Fase 3 — Persistência has no TASK-NNN declaration",
+        "Fase 4 — Mensageria has no TASK-NNN declaration",
+        "Fase 5 — Observabilidade has no TASK-NNN declaration",
+        "Fase 6 — Qualidade has no TASK-NNN declaration",
+        "Fase 7 — Operação has no TASK-NNN declaration"
+      ]
+    },
+    {
+      "dimension": "verification",
+      "status": "pass",
+      "evidence": []
+    },
+    {
+      "dimension": "unsupported-invention",
+      "status": "fail",
+      "evidence": [
+        "content outside structured identifiers differs from the fixture"
+      ]
+    }
+  ],
+  "metrics": {
+    "totalDurationMs": 294425,
+    "inputTokens": 68607,
+    "outputTokens": 11269,
+    "toolCalls": 18,
+    "modelSwitches": 1,
+    "retries": 0,
+    "repairs": 1
+  }
+}

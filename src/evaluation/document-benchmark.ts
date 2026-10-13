@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { DocumentQualityDimension } from "../tools/markdown-quality.js";
 
 export interface DocumentBenchmarkSnapshot {
+  workflowStatus: "succeeded" | "failed";
   fixtureSha256: string;
   promptSha256: string;
   initialTreeHash: string;
@@ -31,6 +32,7 @@ export interface DocumentBenchmarkVerdict {
 const mandatoryDimensions: DocumentQualityDimension["dimension"][] = ["completeness", "specificity", "traceability", "verification"];
 const allDimensions: DocumentQualityDimension["dimension"][] = [...mandatoryDimensions, "unsupported-invention"];
 const snapshotSchema = z.object({
+  workflowStatus: z.enum(["succeeded", "failed"]),
   fixtureSha256: z.string().min(1), promptSha256: z.string().min(1), initialTreeHash: z.string().min(1), runtimeFingerprint: z.string().min(1), modelFingerprint: z.string().min(1),
   quality: z.array(z.object({ dimension: z.enum(allDimensions), status: z.enum(["pass", "fail", "review", "skipped"]), evidence: z.array(z.string()) }).strict()).superRefine((items, context) => {
     for (const dimension of allDimensions) if (items.filter((item) => item.dimension === dimension).length !== 1) context.addIssue({ code: "custom", message: `${dimension} must appear exactly once` });
@@ -52,6 +54,8 @@ export function compareDocumentBenchmarks(before: DocumentBenchmarkSnapshot, aft
     if (before[key] !== after[key]) reasons.push(`${key} differs`);
   }
   if (reasons.length) return { status: "blocked", comparable: false, reasons };
+
+  if (after.workflowStatus !== "succeeded") reasons.push(`candidate workflow is ${after.workflowStatus}, not succeeded`);
 
   const beforeQuality = new Map(before.quality.map((item) => [item.dimension, item.status]));
   const afterQuality = new Map(after.quality.map((item) => [item.dimension, item.status]));
