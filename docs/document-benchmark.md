@@ -59,8 +59,20 @@ preservando todos os bytes fora dos IDs. Fixture, prompt, árvore Git inicial,
 runtime e modelos tiveram fingerprints idênticos; o veredito persistido em
 `benchmarks/results/verdict.json` é `passed`.
 
-O benchmark também mostrou uma oportunidade posterior: mesmo depois de a
-transformação determinística satisfazer o contrato, o implementador ainda foi
-invocado e tentou reeditar o arquivo. Eliminar essa inferência redundante exige
-um critério geral de completude e pertence ao contexto/budget do Milestone 20;
-não foi usado para alterar o gate deste benchmark.
+## Incremento de contexto do Milestone 20
+
+O harness agora persiste um manifesto de contexto sem conteúdo, com hash da
+instrução, proveniência das fontes, alvos, contrato, intervalos alterados e a
+evidência necessária por papel. A inferência do implementador só é omitida
+quando o usuário exige preservação do restante do conteúdo, não pede outra
+mutação semântica, todos os alvos recebem a transformação determinística e os
+gates de Markdown passam. A revisão independente e os gates do repositório
+continuam obrigatórios.
+
+Uma repetição comparável da mesma fixture terminou com sucesso em 64.554 ms,
+11.577 tokens de entrada, 3.745 de saída e 2 tool calls, sem retry ou reparo.
+Contra a candidata anterior, isso reduz 180.216 ms, 10.132 tokens de entrada,
+1.125 tokens de saída (23,1%) e 4 ferramentas. As cinco dimensões continuaram
+aprovadas e todos os bytes fora dos IDs foram preservados. Os snapshots são
+`document-m20-context.json` e `document-m20-context.json.md`; o comparador
+persistido em `document-m20-context-verdict.json` retornou `passed`.

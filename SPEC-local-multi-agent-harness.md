@@ -1870,6 +1870,8 @@ Controlled exit-gate result (2026-10-12): the immutable eight-phase/64-task fixt
 
 Exit gate: repeated fixed-fixture runs show lower median context/tool usage with no loss of correctness, scope adherence, or reviewer agreement.
 
+Incremental result (2026-10-12): the focused workflow now writes a content-free per-role context manifest containing instruction identity, source provenance, explicit targets, contract, changed ranges, role evidence, and remaining verification. Reviewers receive the explicit contract, deterministic gate summary, diff summary, and changed ranges. A conservative deterministic-completion decision skips implementer inference only when all explicit targets were transformed, Markdown gates pass, the user explicitly requires preservation of every other byte, and no additional semantic mutation is requested; repository gates and independent semantic review remain mandatory. On the comparable 64-task fixture, the run succeeded in 64,554 ms with 11,577 input tokens, 3,745 output tokens, and 2 tool calls, versus 244,770 ms, 21,709 input tokens, 4,870 output tokens, and 6 tool calls for the previous candidate. All five quality dimensions still passed and bytes outside identifiers remained unchanged; the comparator passed with a 23.1% output-token reduction. This completes the context-manifest and redundant-inference slices. Content-addressed tool-result caching and enforced adaptive budgets remain pending; the milestone is not yet closed.
+
 ### Milestone 21: reproducible evaluation and code-readiness ladder
 
 - create immutable fixtures and expected invariants for inspection, documentation, one-line code edits, localized fixes, multi-file changes, refactors, and full workflows;

@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "comparable": true,
+  "reasons": [],
+  "outputTokenReduction": 0.23100616016427106,
+  "deltas": {
+    "totalDurationMs": -180216,
+    "inputTokens": -10132,
+    "outputTokens": -1125,
+    "toolCalls": -4,
+    "modelSwitches": -1,
+    "retries": 0,
+    "repairs": 0
+  }
+}

@@ -18,6 +18,9 @@ describe("bounded CLI progress", () => {
     const stream = formatProgress({ timestamp: new Date().toISOString(), type: "agent.stream", message: "implementer write input is streaming", data: { role: "implementer", tool: "write", generatedBytes: 4096, input: "secret file contents" } }, "human")!;
     expect(stream).toContain("generatedBytes=4096"); expect(stream).not.toContain("secret");
     expect(formatProgress({ timestamp: new Date().toISOString(), type: "agent.tokens", message: "generation progressing", data: { role: "implementer", predictedTokens: 512 } }, "human")).toContain("predictedTokens=512");
+    const manifest = formatProgress({ timestamp: new Date().toISOString(), type: "context.manifest", message: "Context selected", data: { route: "focused-document", targets: 1, prompt: "secret" } }, "human")!;
+    expect(manifest).toContain("route=focused-document"); expect(manifest).not.toContain("secret");
+    expect(formatProgress({ timestamp: new Date().toISOString(), type: "implementation.skipped", message: "Skipped redundant inference", data: { files: ["tasks/README.md"], reason: "deterministic" } }, "human")).toContain("deterministic");
   });
 
   it("streams newly persisted visible events and can be disabled", async () => {
